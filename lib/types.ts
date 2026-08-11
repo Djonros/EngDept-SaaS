@@ -28,6 +28,8 @@ export type Plan = "free" | "pro" | "enterprise";
 
 export type ProjectStatus = "active" | "on_hold" | "completed" | "cancelled";
 
+export type ProjectMemberRole = "lead" | "engineer" | "reviewer" | "observer";
+
 export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
   active: "Активный",
   on_hold: "На паузе",
@@ -35,10 +37,26 @@ export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
   cancelled: "Отменён",
 };
 
+export interface CompanyDetails {
+  name?: string;
+  inn?: string;
+  kpp?: string;
+  ogrn?: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+  account?: string;
+  bank?: string;
+  bik?: string;
+  corr_account?: string;
+  ceo_name?: string;
+}
+
 export interface Workspace {
   id: string;
   name: string;
   logo_url: string | null;
+  company_details: CompanyDetails | Record<string, never>;
   plan: Plan;
   license_key: string | null;
   max_users: number;
@@ -76,6 +94,21 @@ export interface Milestone {
   title: string;
   order_index: number;
   created_at: string;
+}
+
+export interface ProjectMember {
+  id: string;
+  project_id: string;
+  user_id: string;
+  role: ProjectMemberRole;
+  created_at: string;
+}
+
+export interface ProjectMemberWithUser extends ProjectMember {
+  user_name: string;
+  user_email: string;
+  user_avatar_url: string | null;
+  user_workspace_role: UserRole;
 }
 
 export interface Task {
@@ -188,6 +221,13 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   engineer: "Инженер",
   freelancer: "Фрилансер",
   reviewer: "Нормоконтролёр",
+};
+
+export const PROJECT_MEMBER_ROLE_LABELS: Record<ProjectMemberRole, string> = {
+  lead: "Руководитель проекта",
+  engineer: "Инженер",
+  reviewer: "Нормоконтролёр",
+  observer: "Наблюдатель",
 };
 
 export const CATEGORY_LABELS: Record<string, string> = {

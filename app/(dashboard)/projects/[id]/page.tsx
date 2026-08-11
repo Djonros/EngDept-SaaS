@@ -18,7 +18,7 @@ import { notFound } from "next/navigation";
 import { requireSession } from "@/lib/session";
 import { createServerClient } from "@/lib/supabase-server";
 import { ProjectDetailView } from "@/components/project-detail-view";
-import type { Project, TaskWithRelations } from "@/lib/types";
+import type { Project, ProjectMemberWithUser, TaskWithRelations } from "@/lib/types";
 
 export default async function ProjectDetailPage({
   params,
@@ -29,7 +29,7 @@ export default async function ProjectDetailPage({
   const supabase = createServerClient();
   const wid = session.workspace.id;
 
-  const [{ data: project, error }, { data: tasks }, { data: milestones }, { data: users }] =
+  const [{ data: project, error }, { data: tasks }, { data: milestones }, { data: users }, { data: members }] =
     await Promise.all([
       supabase
         .from("projects")
@@ -59,6 +59,11 @@ export default async function ProjectDetailPage({
         .eq("workspace_id", wid)
         .eq("is_active", true)
         .order("name"),
+      supabase
+        .from("project_members_with_user")
+        .select("*")
+        .eq("project_id", params.id)
+        .order("created_at", { ascending: false }),
     ]);
 
   if (error || !project) notFound();
@@ -68,6 +73,7 @@ export default async function ProjectDetailPage({
       project={project as Project}
       tasks={(tasks ?? []) as unknown as TaskWithRelations[]}
       milestones={milestones ?? []}
+      members={(members ?? []) as unknown as ProjectMemberWithUser[]}
       workspaceId={wid}
       options={{
         projects: [{ id: (project as Project).id, title: (project as Project).title }],

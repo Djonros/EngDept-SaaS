@@ -30,6 +30,8 @@ import {
   XCircle,
   Settings,
   Upload,
+  Building2,
+  Loader2,
 } from "lucide-react";
 import {
   Card,
@@ -67,6 +69,7 @@ import {
 import { createBrowserClient } from "@/lib/supabase-client";
 import {
   ROLE_LABELS,
+  type CompanyDetails,
   type User,
   type UserRole,
   type Workspace,
@@ -107,14 +110,14 @@ export function AdminPanel({
   const [activating, setActivating] = useState(false);
 
   async function handleRoleChange(userId: string, role: UserRole) {
-    const supabase = createBrowserClient();
-    const { error } = await supabase
-      .from("users")
-      .update({ role })
-      .eq("id", userId);
-
-    if (error) {
-      toast.error("Ошибка: " + error.message);
+    const res = await fetch("/api/admin/update-role", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, role }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      toast.error(data.error || "Ошибка");
     } else {
       toast.success("Роль обновлена");
       router.refresh();
@@ -213,6 +216,10 @@ export function AdminPanel({
             <Settings className="h-4 w-4" />
             Настройки
           </TabsTrigger>
+          <TabsTrigger value="company" className="gap-1.5">
+            <Building2 className="h-4 w-4" />
+            Реквизиты
+          </TabsTrigger>
           <TabsTrigger value="users" className="gap-1.5">
             <UserPlus className="h-4 w-4" />
             Пользователи
@@ -232,6 +239,11 @@ export function AdminPanel({
           <WorkspaceSettings workspace={workspace} />
         </TabsContent>
 
+        {/* Company details tab */}
+        <TabsContent value="company">
+          <CompanyDetailsSettings workspace={workspace} />
+        </TabsContent>
+
         {/* Users tab */}
         <TabsContent value="users">
           <Card>
@@ -239,6 +251,10 @@ export function AdminPanel({
               <CardTitle className="text-base">
                 Пользователи ({users.length} / {workspace.max_users})
               </CardTitle>
+              <Button size="sm" onClick={() => setInviteOpen(true)}>
+                <UserPlus className="mr-1 h-4 w-4" />
+                Добавить
+              </Button>
             </CardHeader>
             <CardContent>
               <Table>
@@ -267,29 +283,23 @@ export function AdminPanel({
                         {user.email}
                       </TableCell>
                       <TableCell>
-                        {user.role === "owner" ? (
-                          <Badge variant="default">
-                            {ROLE_LABELS[user.role]}
-                          </Badge>
-                        ) : (
-                          <Select
-                            value={user.role}
-                            onValueChange={(v) =>
-                              handleRoleChange(user.id, v as UserRole)
-                            }
-                          >
-                            <SelectTrigger className="w-36">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {ROLES.map((r) => (
-                                <SelectItem key={r} value={r}>
-                                  {ROLE_LABELS[r]}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        )}
+                        <Select
+                          value={user.role}
+                          onValueChange={(v) =>
+                            handleRoleChange(user.id, v as UserRole)
+                          }
+                        >
+                          <SelectTrigger className="w-36">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {ROLES.map((r) => (
+                              <SelectItem key={r} value={r}>
+                                {ROLE_LABELS[r]}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {user.telegram_id ?? "—"}
@@ -462,11 +472,10 @@ export function AdminPanel({
       <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Пригласить пользователя</DialogTitle>
+            <DialogTitle>Добавить сотрудника</DialogTitle>
           </DialogHeader>
-          <InviteForm
+          <AddUserForm
             onClose={() => setInviteOpen(false)}
-            workspaceId={workspace.id}
           />
         </DialogContent>
       </Dialog>
@@ -640,57 +649,51 @@ function WorkspaceSettings({ workspace }: { workspace: Workspace }) {
   );
 }
 
-function InviteForm({
+function AddUserForm({
   onClose,
-  workspaceId,
 }: {
   onClose: () => void;
-  workspaceId: string;
 }) {
   const router = useRouter();
-  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<UserRole>("engineer");
   const [saving, setSaving] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim() || !email.trim()) return;
+    if (!email.trim()) return;
     setSaving(true);
-    const supabase = createBrowserClient();
-    const { error } = await supabase.from("users").insert({
-      workspace_id: workspaceId,
-      name: name.trim(),
-      email: email.trim(),
-      role,
-      is_active: true,
-    });
-
-    if (error) {
-      toast.error("Ошибка: " + error.message);
-    } else {
-      toast.success("Пользователь добавлен");
-      onClose();
-      router.refresh();
+    try {
+      const res = await fetch("/api/admin/add-user", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), role }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Ошибка");
+      } else {
+        toast.success(`Сотрудник «${data.name}» добавлен`);
+        onClose();
+        router.refresh();
+      }
+    } catch {
+      toast.error("Ошибка сети");
     }
     setSaving(false);
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="invite-name">Имя</Label>
-        <Input
-          id="invite-name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Иван Иванов"
-        />
+      <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-200">
+        Введите email уже зарегистрированного на платформе пользователя.
+        Если сотрудник ещё не зарегистрирован — попросите его сначала создать
+        аккаунт.
       </div>
       <div className="space-y-2">
-        <Label htmlFor="invite-email">Email</Label>
+        <Label htmlFor="add-email">Email сотрудника</Label>
         <Input
-          id="invite-email"
+          id="add-email"
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -704,7 +707,7 @@ function InviteForm({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {ROLES.filter((r) => r !== "owner").map((r) => (
+            {ROLES.map((r) => (
               <SelectItem key={r} value={r}>
                 {ROLE_LABELS[r]}
               </SelectItem>
@@ -717,9 +720,95 @@ function InviteForm({
           Отмена
         </Button>
         <Button type="submit" disabled={saving}>
-          {saving ? "Сохранение..." : "Добавить"}
+          {saving ? (
+            <>
+              <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+              Добавление...
+            </>
+          ) : (
+            "Добавить"
+          )}
         </Button>
       </DialogFooter>
     </form>
+  );
+}
+
+const COMPANY_FIELDS: { key: keyof CompanyDetails; label: string; placeholder?: string }[] = [
+  { key: "name", label: "Полное наименование", placeholder: "ООО «Конструкторское бюро»" },
+  { key: "inn", label: "ИНН", placeholder: "7707083893" },
+  { key: "kpp", label: "КПП", placeholder: "771001001" },
+  { key: "ogrn", label: "ОГРН", placeholder: "1027700132195" },
+  { key: "address", label: "Юридический адрес", placeholder: "г. Москва, ул. ..." },
+  { key: "phone", label: "Телефон", placeholder: "+7 (495) 123-45-67" },
+  { key: "email", label: "Email", placeholder: "info@example.com" },
+  { key: "account", label: "Расчётный счёт", placeholder: "40702810400000001234" },
+  { key: "bank", label: "Банк", placeholder: "ПАО «Сбербанк»" },
+  { key: "bik", label: "БИК", placeholder: "044525225" },
+  { key: "corr_account", label: "Корр. счёт", placeholder: "30101810400000000225" },
+  { key: "ceo_name", label: "Руководитель (ФИО)", placeholder: "Иванов И. И." },
+];
+
+function CompanyDetailsSettings({ workspace }: { workspace: Workspace }) {
+  const router = useRouter();
+  const initial: CompanyDetails =
+    (workspace.company_details as CompanyDetails) ?? {};
+  const [details, setDetails] = useState<CompanyDetails>(initial);
+  const [saving, setSaving] = useState(false);
+
+  function update(key: keyof CompanyDetails, value: string) {
+    setDetails((prev) => ({ ...prev, [key]: value || undefined }));
+  }
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    const supabase = createBrowserClient();
+    const { error } = await supabase
+      .from("workspaces")
+      .update({ company_details: details })
+      .eq("id", workspace.id);
+    if (error) {
+      toast.error("Ошибка: " + error.message);
+    } else {
+      toast.success("Реквизиты сохранены");
+      router.refresh();
+    }
+    setSaving(false);
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Building2 className="h-4 w-4" />
+          Реквизиты организации
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSave} className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            {COMPANY_FIELDS.map(({ key, label, placeholder }) => (
+              <div key={key} className="space-y-2">
+                <Label htmlFor={`cd-${key}`}>{label}</Label>
+                <Input
+                  id={`cd-${key}`}
+                  value={(details[key] as string) ?? ""}
+                  onChange={(e) => update(key, e.target.value)}
+                  placeholder={placeholder}
+                />
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Эти реквизиты подставляются в документы на оплату по завершённым
+            проектам.
+          </p>
+          <Button type="submit" disabled={saving}>
+            {saving ? "Сохранение..." : "Сохранить реквизиты"}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
   );
 }

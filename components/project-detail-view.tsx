@@ -29,12 +29,21 @@ import {
   DollarSign,
   ListTodo,
   Milestone as MilestoneIcon,
+  Users,
+  FileText,
 } from "lucide-react";
 import { createBrowserClient } from "@/lib/supabase-client";
 import { toast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { KanbanBoard } from "@/components/kanban-board";
 import { TaskFormDialog, type TaskFormOptions } from "@/components/task-form-dialog";
@@ -42,7 +51,10 @@ import { TaskDetailSheet } from "@/components/task-detail-sheet";
 import { ProjectFormDialog } from "@/components/project-form-dialog";
 import {
   PROJECT_STATUS_LABELS,
+  PROJECT_MEMBER_ROLE_LABELS,
   type Project,
+  type ProjectMemberRole,
+  type ProjectMemberWithUser,
   type ProjectStatus,
   type TaskStage,
   type TaskWithRelations,
@@ -60,6 +72,7 @@ interface ProjectDetailViewProps {
   project: Project;
   tasks: TaskWithRelations[];
   milestones: { id: string; title: string; project_id: string }[];
+  members: ProjectMemberWithUser[];
   workspaceId: string;
   options: TaskFormOptions;
 }
@@ -68,6 +81,7 @@ export function ProjectDetailView({
   project,
   tasks,
   milestones,
+  members,
   workspaceId,
   options,
 }: ProjectDetailViewProps) {
@@ -77,6 +91,9 @@ export function ProjectDetailView({
   const [editProjectOpen, setEditProjectOpen] = useState(false);
   const [newMilestone, setNewMilestone] = useState("");
   const [milestoneBusy, setMilestoneBusy] = useState(false);
+  const [memberBusy, setMemberBusy] = useState(false);
+  const [newMemberId, setNewMemberId] = useState("");
+  const [newMemberRole, setNewMemberRole] = useState<ProjectMemberRole>("engineer");
 
   const selectedTask = tasks.find((t) => t.id === selectedId) ?? null;
   const doneCount = tasks.filter((t) => t.stage === "done").length;
@@ -128,6 +145,61 @@ export function ProjectDetailView({
     router.refresh();
   }
 
+  async function addMember(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newMemberId) {
+      toast.error("Выберите пользователя");
+      return;
+    }
+    setMemberBusy(true);
+    const supabase = createBrowserClient();
+    const { error } = await supabase.from("project_members").insert({
+      project_id: project.id,
+      user_id: newMemberId,
+      role: newMemberRole,
+    });
+    if (error) {
+      if (error.code === "23505") {
+        toast.error("Этот пользователь уже в команде проекта");
+      } else {
+        toast.error("Ошибка: " + error.message);
+      }
+    } else {
+      toast.success("Участник добавлен");
+      setNewMemberId("");
+      setNewMemberRole("engineer");
+      router.refresh();
+    }
+    setMemberBusy(false);
+  }
+
+  async function removeMember(id: string) {
+    const supabase = createBrowserClient();
+    const { error } = await supabase
+      .from("project_members")
+      .delete()
+      .eq("id", id);
+    if (error) {
+      toast.error("Ошибка: " + error.message);
+      return;
+    }
+    toast.success("Участник удалён");
+    router.refresh();
+  }
+
+  async function changeMemberRole(id: string, role: ProjectMemberRole) {
+    const supabase = createBrowserClient();
+    const { error } = await supabase
+      .from("project_members")
+      .update({ role })
+      .eq("id", id);
+    if (error) {
+      toast.error("Ошибка: " + error.message);
+      return;
+    }
+    router.refresh();
+  }
+
   const formOptions: TaskFormOptions = {
     ...options,
     projects: [{ id: project.id, title: project.title }],
@@ -161,6 +233,12 @@ export function ProjectDetailView({
           <Button variant="outline" size="sm" onClick={() => setEditProjectOpen(true)}>
             <Pencil className="mr-1 h-4 w-4" />
             Редактировать
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <a href={`/projects/${project.id}/payment-doc`} target="_blank">
+              <FileText className="mr-1 h-4 w-4" />
+              Документ на оплату
+            </a>
           </Button>
           <Button size="sm" onClick={() => setCreateTaskOpen(true)}>
             <Plus className="mr-1 h-4 w-4" />
@@ -238,7 +316,88 @@ export function ProjectDetailView({
 
       <Separator />
 
-      {/* Kanban */}
+      {/* Team */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <Users className="h-4 w-4 text-muted-foreground" />
+          <h2 className="text-sm font-semibold">Команда проекта</h2>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {members.map((m) => (
+            <div
+              key={m.id}
+              className="flex items-center gap-2 rounded-md border bg-card px-3 py-1.5 text-sm"
+            >
+              <span className="font-medium">{m.user_name}</span>
+              <Select
+                value={m.role}
+                onValueChange={(v) => changeMemberRole(m.id, v as ProjectMemberRole)}
+              >
+                <SelectTrigger className="h-7 w-auto gap-1 border-none px-1 text-xs text-muted-foreground">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(PROJECT_MEMBER_ROLE_LABELS) as ProjectMemberRole[]).map((r) => (
+                    <SelectItem key={r} value={r}>
+                      {PROJECT_MEMBER_ROLE_LABELS[r]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <button
+                onClick={() => removeMember(m.id)}
+                className="text-muted-foreground hover:text-destructive"
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
+            </div>
+          ))}
+          {members.length === 0 && (
+            <p className="text-xs text-muted-foreground">Команда не назначена</p>
+          )}
+        </div>
+        <form onSubmit={addMember} className="flex flex-wrap gap-2">
+          <Select value={newMemberId} onValueChange={setNewMemberId}>
+            <SelectTrigger className="w-48">
+              <SelectValue placeholder="Выбрать пользователя..." />
+            </SelectTrigger>
+            <SelectContent>
+              {options.users
+                .filter((u) => !members.some((m) => m.user_id === u.id))
+                .map((u) => (
+                  <SelectItem key={u.id} value={u.id}>
+                    {u.name}
+                  </SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={newMemberRole}
+            onValueChange={(v) => setNewMemberRole(v as ProjectMemberRole)}
+          >
+            <SelectTrigger className="w-44">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {(Object.keys(PROJECT_MEMBER_ROLE_LABELS) as ProjectMemberRole[]).map((r) => (
+                <SelectItem key={r} value={r}>
+                  {PROJECT_MEMBER_ROLE_LABELS[r]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button type="submit" variant="outline" size="sm" disabled={memberBusy}>
+            {memberBusy ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Plus className="h-4 w-4" />
+            )}
+            <span className="ml-1">Добавить</span>
+          </Button>
+        </form>
+      </div>
+
+      <Separator />
       <KanbanBoard
         tasks={tasks}
         onTaskClick={(t) => setSelectedId(t.id)}
