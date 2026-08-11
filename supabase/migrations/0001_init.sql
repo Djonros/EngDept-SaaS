@@ -34,20 +34,10 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- ============================================================================
 --  Helper: current user's workspace_id  (used by every RLS policy)
+--  NOTE: Defined AFTER the users table is created, because PostgreSQL
+--  validates SQL function bodies at creation time (check_function_bodies = on).
+--  See bottom of file for the actual CREATE FUNCTION statement.
 -- ============================================================================
-
-CREATE OR REPLACE FUNCTION public.current_workspace_id()
-RETURNS UUID
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path = public
-AS $$
-  SELECT workspace_id
-  FROM public.users
-  WHERE id = auth.uid()
-  LIMIT 1;
-$$;
 
 -- ============================================================================
 --  1. workspaces
@@ -78,6 +68,23 @@ CREATE TABLE IF NOT EXISTS public.users (
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_users_workspace ON public.users(workspace_id);
+
+-- ============================================================================
+--  Helper: current user's workspace_id  (used by every RLS policy)
+--  Defined here because PostgreSQL validates SQL function bodies at creation.
+-- ============================================================================
+CREATE OR REPLACE FUNCTION public.current_workspace_id()
+RETURNS UUID
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT workspace_id
+  FROM public.users
+  WHERE id = auth.uid()
+  LIMIT 1;
+$$;
 
 -- ============================================================================
 --  3. projects
@@ -435,6 +442,12 @@ DECLARE
 BEGIN
   IF v_uid IS NULL THEN
     RAISE EXCEPTION 'Not authenticated';
+  END IF;
+
+  -- Idempotent: if user already has a profile, return existing workspace
+  SELECT workspace_id INTO v_ws_id FROM public.users WHERE id = v_uid;
+  IF FOUND THEN
+    RETURN v_ws_id;
   END IF;
 
   INSERT INTO public.workspaces (name)

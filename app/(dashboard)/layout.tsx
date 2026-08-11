@@ -34,6 +34,7 @@ export default async function DashboardLayout({
       }}
       workspace={{
         name: session.workspace.name,
+        logo_url: session.workspace.logo_url,
         plan: session.workspace.plan,
       }}
     >

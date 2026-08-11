@@ -18,6 +18,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { toast } from "sonner";
 import {
   Shield,
@@ -27,6 +28,8 @@ import {
   Power,
   CheckCircle2,
   XCircle,
+  Settings,
+  Upload,
 } from "lucide-react";
 import {
   Card,
@@ -206,6 +209,10 @@ export function AdminPanel({
 
       <Tabs defaultValue="users">
         <TabsList>
+          <TabsTrigger value="settings" className="gap-1.5">
+            <Settings className="h-4 w-4" />
+            Настройки
+          </TabsTrigger>
           <TabsTrigger value="users" className="gap-1.5">
             <UserPlus className="h-4 w-4" />
             Пользователи
@@ -219,6 +226,11 @@ export function AdminPanel({
             Журнал аудита
           </TabsTrigger>
         </TabsList>
+
+        {/* Settings tab */}
+        <TabsContent value="settings">
+          <WorkspaceSettings workspace={workspace} />
+        </TabsContent>
 
         {/* Users tab */}
         <TabsContent value="users">
@@ -458,6 +470,172 @@ export function AdminPanel({
           />
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function WorkspaceSettings({ workspace }: { workspace: Workspace }) {
+  const router = useRouter();
+  const [name, setName] = useState(workspace.name);
+  const [savingName, setSavingName] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  async function handleSaveName(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) return;
+    setSavingName(true);
+    const supabase = createBrowserClient();
+    const { error } = await supabase
+      .from("workspaces")
+      .update({ name: name.trim() })
+      .eq("id", workspace.id);
+
+    if (error) {
+      toast.error("Ошибка: " + error.message);
+    } else {
+      toast.success("Название обновлено");
+      router.refresh();
+    }
+    setSavingName(false);
+  }
+
+  async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("Файл слишком большой (макс. 2 МБ)");
+      return;
+    }
+
+    setUploading(true);
+    const supabase = createBrowserClient();
+    const ext = file.name.split(".").pop() || "png";
+    const path = `${workspace.id}/logo.${ext}`;
+
+    const { error: upErr } = await supabase.storage
+      .from("workspace-files")
+      .upload(path, file, { upsert: true });
+
+    if (upErr) {
+      toast.error("Ошибка загрузки: " + upErr.message);
+      setUploading(false);
+      return;
+    }
+
+    const { data: pub } = supabase.storage
+      .from("workspace-files")
+      .getPublicUrl(path);
+
+    const { error: dbErr } = await supabase
+      .from("workspaces")
+      .update({ logo_url: pub.publicUrl })
+      .eq("id", workspace.id);
+
+    if (dbErr) {
+      toast.error("Ошибка сохранения: " + dbErr.message);
+    } else {
+      toast.success("Логотип обновлён");
+      router.refresh();
+    }
+    setUploading(false);
+  }
+
+  async function handleRemoveLogo() {
+    const supabase = createBrowserClient();
+    const { error } = await supabase
+      .from("workspaces")
+      .update({ logo_url: null })
+      .eq("id", workspace.id);
+
+    if (error) {
+      toast.error("Ошибка: " + error.message);
+    } else {
+      toast.success("Логотип удалён");
+      router.refresh();
+    }
+  }
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      {/* Workspace name */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Settings className="h-4 w-4" />
+            Название организации
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSaveName} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="ws-name">Название</Label>
+              <Input
+                id="ws-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="ООО «Конструкторское бюро»"
+              />
+            </div>
+            <Button type="submit" disabled={savingName || name.trim() === workspace.name}>
+              {savingName ? "Сохранение..." : "Сохранить"}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      {/* Logo upload */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Upload className="h-4 w-4" />
+            Логотип
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center gap-4">
+            {workspace.logo_url ? (
+              <Image
+                src={workspace.logo_url}
+                alt="Логотип"
+                width={64}
+                height={64}
+                className="h-16 w-16 rounded-lg border object-cover"
+              />
+            ) : (
+              <div className="flex h-16 w-16 items-center justify-center rounded-lg border bg-muted">
+                <Settings className="h-6 w-6 text-muted-foreground" />
+              </div>
+            )}
+            <div className="flex-1 space-y-2">
+              <label htmlFor="logo-upload">
+                <Button variant="outline" size="sm" asChild disabled={uploading}>
+                  <span className="cursor-pointer">
+                    <Upload className="mr-2 h-4 w-4" />
+                    {uploading ? "Загрузка..." : "Загрузить"}
+                  </span>
+                </Button>
+              </label>
+              <input
+                id="logo-upload"
+                type="file"
+                accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                className="hidden"
+                onChange={handleLogoUpload}
+                disabled={uploading}
+              />
+              {workspace.logo_url && (
+                <Button variant="ghost" size="sm" onClick={handleRemoveLogo}>
+                  Удалить логотип
+                </Button>
+              )}
+              <p className="text-xs text-muted-foreground">
+                PNG, JPG, SVG или WebP. Макс. 2 МБ.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

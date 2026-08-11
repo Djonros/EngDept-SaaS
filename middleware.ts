@@ -22,7 +22,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-const PUBLIC_ROUTES = ["/login", "/register", "/license-activate"];
+const PUBLIC_ROUTES = ["/login", "/register", "/license-activate", "/auth"];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -37,6 +37,9 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Build response that will carry refreshed auth cookies back to the browser
+  let supabaseResponse = NextResponse.next({ request });
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -46,14 +49,16 @@ export async function middleware(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet: { name: string; value: string; options?: Record<string, unknown> }[]) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          );
+          cookiesToSet.forEach(({ name, value, options }) => {
+            request.cookies.set(name, value);
+            supabaseResponse.cookies.set(name, value, options ?? {});
+          });
         },
       },
     }
   );
 
+  // getUser() validates the session and refreshes cookies if needed
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -65,8 +70,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Role-based route guard: freelancers can't access /(dashboard) staff pages
-  if (pathname.startsWith("/projects") || pathname.startsWith("/catalog") || pathname.startsWith("/admin") || pathname.startsWith("/analytics")) {
+  // Role-based route guard: freelancers can't access staff pages
+  if (
+    pathname.startsWith("/projects") ||
+    pathname.startsWith("/catalog") ||
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/analytics")
+  ) {
     const { data: profile } = await supabase
       .from("users")
       .select("role")
@@ -80,7 +90,7 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  return NextResponse.next();
+  return supabaseResponse;
 }
 
 export const config = {

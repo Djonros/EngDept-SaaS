@@ -31,6 +31,7 @@ interface AppShellProps {
   };
   workspace: {
     name: string;
+    logo_url: string | null;
     plan: Plan;
   };
 }

@@ -38,6 +38,7 @@ export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
 export interface Workspace {
   id: string;
   name: string;
+  logo_url: string | null;
   plan: Plan;
   license_key: string | null;
   max_users: number;

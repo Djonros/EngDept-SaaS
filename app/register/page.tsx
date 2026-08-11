@@ -41,36 +41,52 @@ export default function RegisterPage() {
     setLoading(true);
     setError(null);
 
-    const supabase = createBrowserClient();
+    try {
+      const supabase = createBrowserClient();
 
-    // 1. Create auth user
-    const { data: authData, error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { full_name: userName } },
-    });
+      // 1. Create auth user
+      const { data: authData, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { full_name: userName, workspace_name: workspaceName } },
+      });
 
-    if (signUpError || !authData.user) {
-      setError(signUpError?.message || "Ошибка регистрации");
+      if (signUpError || !authData.user) {
+        setError(signUpError?.message || "Ошибка регистрации");
+        setLoading(false);
+        return;
+      }
+
+      // 2. If email confirmation is required, no session is returned yet
+      if (!authData.session) {
+        setError(
+          "Подтвердите email — мы отправили ссылку на " +
+            email +
+            ". После подтверждения войдите в систему."
+        );
+        setLoading(false);
+        return;
+      }
+
+      // 3. Create workspace + owner profile via RPC (requires active session)
+      const { error: rpcError } = await supabase.rpc("create_workspace_with_owner", {
+        p_workspace_name: workspaceName,
+        p_user_name: userName,
+        p_user_email: email,
+      });
+
+      if (rpcError) {
+        setError("Ошибка создания workspace: " + rpcError.message);
+        setLoading(false);
+        return;
+      }
+
+      router.push("/dashboard");
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Произошла ошибка при регистрации");
       setLoading(false);
-      return;
     }
-
-    // 2. Create workspace + owner profile via RPC
-    const { error: rpcError } = await supabase.rpc("create_workspace_with_owner", {
-      p_workspace_name: workspaceName,
-      p_user_name: userName,
-      p_user_email: email,
-    });
-
-    if (rpcError) {
-      setError("Ошибка создания workspace: " + rpcError.message);
-      setLoading(false);
-      return;
-    }
-
-    router.push("/dashboard");
-    router.refresh();
   }
 
   return (

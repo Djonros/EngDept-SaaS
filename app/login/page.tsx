@@ -41,20 +41,25 @@ function LoginForm() {
     setLoading(true);
     setError(null);
 
-    const supabase = createBrowserClient();
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      const supabase = createBrowserClient();
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    if (signInError) {
-      setError("Неверный email или пароль");
+      if (signInError) {
+        setError(signInError.message);
+        setLoading(false);
+        return;
+      }
+
+      router.push(redirectUrl);
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Произошла ошибка при входе");
       setLoading(false);
-      return;
     }
-
-    router.push(redirectUrl);
-    router.refresh();
   }
 
   return (

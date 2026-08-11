@@ -37,11 +37,35 @@ export async function getSession(): Promise<Session | null> {
 
   if (!authUser) return null;
 
-  const { data: user } = await supabase
+  let { data: user } = await supabase
     .from("users")
     .select("*")
     .eq("id", authUser.id)
     .single();
+
+  // Auto-create profile if missing (e.g. after email confirmation)
+  if (!user) {
+    const wsName = (authUser.user_metadata as Record<string, string>)?.workspace_name
+      || "Моя организация";
+    const fullName = (authUser.user_metadata as Record<string, string>)?.full_name
+      || authUser.email
+      || "Пользователь";
+
+    if (wsName) {
+      await supabase.rpc("create_workspace_with_owner", {
+        p_workspace_name: wsName,
+        p_user_name: fullName,
+        p_user_email: authUser.email ?? "",
+      });
+
+      const { data: retry } = await supabase
+        .from("users")
+        .select("*")
+        .eq("id", authUser.id)
+        .single();
+      user = retry;
+    }
+  }
 
   if (!user || !user.is_active) return null;
 
