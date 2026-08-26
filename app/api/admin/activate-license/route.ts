@@ -16,17 +16,21 @@
 
 // ============================================================================
 //  POST /api/admin/activate-license
-//  Server-side license activation. Client-side lookup is impossible under
-//  RLS (unbound license rows have workspace_id = NULL, invisible to users).
+//  Offline activation: the key carries an Ed25519 signature and is verified
+//  locally (no vendor server needed). Writes the license into this
+//  deployment's own database.
 // ============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase-server";
-import { createAdminClient } from "@/lib/supabase-client";
+import { activateLicense } from "@/lib/license-server";
 
 export async function POST(request: NextRequest) {
   try {
-    const { licenseKey } = (await request.json()) as { licenseKey?: string };
+    const { licenseKey, hardwareId } = (await request.json()) as {
+      licenseKey?: string;
+      hardwareId?: string;
+    };
 
     if (!licenseKey || !licenseKey.trim()) {
       return NextResponse.json(
@@ -60,57 +64,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const admin = createAdminClient();
-    const { data: license } = await admin
-      .from("licenses")
-      .select("*")
-      .eq("key", licenseKey.trim().toUpperCase())
-      .single();
+    const result = await activateLicense(
+      licenseKey.trim(),
+      caller.workspace_id,
+      hardwareId ?? ""
+    );
 
-    if (!license) {
+    if (!result.success) {
       return NextResponse.json(
-        { error: "Лицензионный ключ не найден" },
-        { status: 404 }
+        { error: result.error ?? "Ошибка активации" },
+        { status: 400 }
       );
     }
 
-    if (license.status === "revoked") {
-      return NextResponse.json({ error: "Лицензия отозвана" }, { status: 400 });
-    }
-
-    if (license.workspace_id && license.workspace_id !== caller.workspace_id) {
-      return NextResponse.json(
-        { error: "Ключ уже привязан к другому workspace" },
-        { status: 409 }
-      );
-    }
-
-    const { error: wsErr } = await admin
-      .from("workspaces")
-      .update({
-        plan: license.plan,
-        license_key: license.key,
-        expires_at: license.expires_at,
-      })
-      .eq("id", caller.workspace_id);
-
-    if (wsErr) {
-      return NextResponse.json(
-        { error: "Ошибка активации: " + wsErr.message },
-        { status: 500 }
-      );
-    }
-
-    await admin
-      .from("licenses")
-      .update({
-        workspace_id: caller.workspace_id,
-        status: "active",
-        activated_at: new Date().toISOString(),
-      })
-      .eq("id", license.id);
-
-    return NextResponse.json({ success: true, plan: license.plan }, { status: 200 });
+    return NextResponse.json(
+      { success: true, plan: result.license?.plan },
+      { status: 200 }
+    );
   } catch {
     return NextResponse.json(
       { error: "Внутренняя ошибка сервера" },

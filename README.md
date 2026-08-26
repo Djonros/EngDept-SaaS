@@ -763,7 +763,7 @@ DnD использует нативный HTML5 API. Убедитесь, что:
 ## Контакты
 
 **Правообладатель:** Djonros
-**Email:** djonros@gmail.com
+**Email:** [djonros@gmail.com](mailto:djonros@gmail.com)
 **Дата сборки:** 2024–2026
 
 ---

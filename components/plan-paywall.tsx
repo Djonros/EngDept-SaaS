@@ -39,6 +39,12 @@ export function PlanPaywall({ feature }: { feature: PlanFeature }) {
           Смотреть тарифы
         </Link>
       </Button>
+      <a
+        className="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
+        href="mailto:djonros@gmail.com?subject=%D0%9B%D0%B8%D1%86%D0%B5%D0%BD%D0%B7%D0%B8%D1%8F%20EngDept%20SaaS"
+      >
+        Написать поставщику
+      </a>
     </div>
   );
 }

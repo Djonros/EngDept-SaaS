@@ -134,9 +134,16 @@ export default async function PricingPage() {
       <Card>
         <CardContent className="pt-6 text-sm text-muted-foreground">
           <p className="mb-1 font-medium text-foreground">Как оплатить</p>
-          Свяжитесь с поставщиком (djonros@gmail.com) для покупки лицензионного
-          ключа Pro или Enterprise, затем активируйте ключ в разделе
-          «Администрирование → Лицензия». Ключ действует 12 месяцев.
+          Напишите поставщику —{" "}
+          <a
+            className="font-medium text-primary underline underline-offset-4"
+            href="mailto:djonros@gmail.com?subject=%D0%9B%D0%B8%D1%86%D0%B5%D0%BD%D0%B7%D0%B8%D1%8F%20EngDept%20SaaS"
+          >
+            djonros@gmail.com
+          </a>{" "}
+          — для покупки лицензионного ключа Pro или Enterprise, затем
+          активируйте ключ в разделе «Администрирование → Лицензия». Ключ
+          действует 12 месяцев.
         </CardContent>
       </Card>
     </div>

@@ -20,7 +20,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ShieldCheck, Loader2, CheckCircle2, XCircle } from "lucide-react";
 import { createBrowserClient } from "@/lib/supabase-client";
-import { activateLicense, getHardwareFingerprint } from "@/lib/license-validator";
+import { getHardwareFingerprint } from "@/lib/license-validator";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -51,31 +51,26 @@ export default function LicenseActivatePage() {
       return;
     }
 
-    // Fetch user's workspace
-    const { data: profile } = await supabase
-      .from("users")
-      .select("workspace_id")
-      .eq("id", user.id)
-      .single();
-
-    if (!profile?.workspace_id) {
-      setResult({ success: false, message: "Workspace не найден" });
-      setLoading(false);
-      return;
-    }
-
     const hardwareId = await getHardwareFingerprint();
-    const { success, error, license } = await activateLicense(
-      key,
-      profile.workspace_id,
-      hardwareId
-    );
 
-    if (success && license) {
-      setResult({ success: true, message: `Лицензия ${license.plan} активирована до ${license.expires_at ? new Date(license.expires_at).toLocaleDateString("ru-RU") : "бессрочно"}` });
-      setTimeout(() => router.push("/dashboard"), 2000);
-    } else {
-      setResult({ success: false, message: error || "Ошибка активации" });
+    try {
+      const res = await fetch("/api/admin/activate-license", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ licenseKey: key.trim(), hardwareId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setResult({ success: false, message: data.error || "Ошибка активации" });
+      } else {
+        setResult({
+          success: true,
+          message: `Лицензия тарифа ${String(data.plan).toUpperCase()} активирована`,
+        });
+        setTimeout(() => router.push("/dashboard"), 2000);
+      }
+    } catch {
+      setResult({ success: false, message: "Ошибка сети" });
     }
 
     setLoading(false);
@@ -99,7 +94,7 @@ export default function LicenseActivatePage() {
               <Label htmlFor="key">Лицензионный ключ</Label>
               <Input
                 id="key"
-                placeholder="XXXX-XXXX-XXXX-XXXX"
+                placeholder="XXXXX-XXXXX-XXXXX-…"
                 value={key}
                 onChange={(e) => setKey(e.target.value.toUpperCase())}
                 required

@@ -53,7 +53,7 @@ Supabase), затем `start.bat` — сервер запустится и от�
 `migrations` и запустите `node server.js`.
 
 **Лицензия:** проприетарное ПО. Контакты для лицензирования и демонстрации:
-djonros@gmail.com
+[djonros@gmail.com](mailto:djonros@gmail.com)
 
 ---
 
@@ -67,7 +67,7 @@ djonros@gmail.com
 стоимости, готовые документы на оплату, портал фрилансеров, аналитика и аудит.
 Multi-tenant, разворачивается на своём сервере. Next.js + Supabase.
 
-Контакты: djonros@gmail.com
+Контакты: [djonros@gmail.com](mailto:djonros@gmail.com)
 
 ---
 
@@ -101,6 +101,6 @@ in one workspace.
 account required), then run `start.bat`. On Linux/macOS apply the SQL
 migrations from the `migrations` folder and run `node server.js`.
 
-**License:** proprietary. Licensing & demo inquiries: djonros@gmail.com
+**License:** proprietary. Licensing & demo inquiries: [djonros@gmail.com](mailto:djonros@gmail.com)
 
 ---

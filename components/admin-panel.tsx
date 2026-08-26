@@ -409,9 +409,9 @@ export function AdminPanel({
                   <Label htmlFor="license-key">Новый лицензионный ключ</Label>
                   <Input
                     id="license-key"
-                    placeholder="XXXX-XXXX-XXXX-XXXX"
+                    placeholder="XXXXX-XXXXX-XXXXX-…"
                     value={licenseKey}
-                    onChange={(e) => setLicenseKey(e.target.value)}
+                    onChange={(e) => setLicenseKey(e.target.value.toUpperCase())}
                     className="font-mono"
                   />
                 </div>
@@ -425,6 +425,15 @@ export function AdminPanel({
                 <p className="text-xs text-muted-foreground">
                   Введите ключ для смены тарифного плана. Ключ привязывается к
                   вашему workspace.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Ключ можно получить у поставщика:{" "}
+                  <a
+                    className="underline underline-offset-4 hover:text-foreground"
+                    href="mailto:djonros@gmail.com?subject=%D0%9B%D0%B8%D1%86%D0%B5%D0%BD%D0%B7%D0%B8%D1%8F%20EngDept%20SaaS"
+                  >
+                    djonros@gmail.com
+                  </a>
                 </p>
               </CardContent>
             </Card>
