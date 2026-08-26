@@ -16,9 +16,12 @@
 
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Sparkles } from "lucide-react";
 import { createBrowserClient } from "@/lib/supabase-client";
 import { Sidebar } from "@/components/sidebar";
+import { Button } from "@/components/ui/button";
 import type { UserRole, Plan } from "@/lib/types";
 
 interface AppShellProps {
@@ -50,6 +53,20 @@ export function AppShell({ children, user, workspace }: AppShellProps) {
     <div className="flex h-screen overflow-hidden">
       <Sidebar user={user} workspace={workspace} onSignOut={handleSignOut} />
       <main className="flex-1 overflow-y-auto bg-background">
+        {workspace.plan === "free" && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-muted/50 px-6 py-2">
+            <p className="text-sm text-muted-foreground">
+              Вы на бесплатном тарифе: до 3 пользователей и 3 проектов,
+              часть разделов закрыта.
+            </p>
+            <Button asChild size="sm" variant="outline">
+              <Link href="/pricing">
+                <Sparkles className="mr-2 h-4 w-4" />
+                Улучшить тариф
+              </Link>
+            </Button>
+          </div>
+        )}
         <div className="mx-auto max-w-7xl p-6">{children}</div>
       </main>
     </div>

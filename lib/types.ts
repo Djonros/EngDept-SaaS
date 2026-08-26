@@ -60,6 +60,7 @@ export interface Workspace {
   plan: Plan;
   license_key: string | null;
   max_users: number;
+  max_projects: number | null;
   expires_at: string | null;
   created_at: string;
 }

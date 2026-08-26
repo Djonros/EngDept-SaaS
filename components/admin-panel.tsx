@@ -17,6 +17,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { toast } from "sonner";
@@ -32,6 +33,7 @@ import {
   Upload,
   Building2,
   Loader2,
+  Lock,
 } from "lucide-react";
 import {
   Card,
@@ -71,6 +73,13 @@ import {
 } from "@/lib/types";
 import { hasRole } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
+import {
+  PLAN_LABELS,
+  FEATURE_LABELS,
+  formatRub,
+  getPlanConfig,
+  hasFeature,
+} from "@/lib/plans";
 
 interface AdminPanelProps {
   workspace: Workspace;
@@ -87,11 +96,7 @@ const ROLES: UserRole[] = [
   "freelancer",
 ];
 
-const PLAN_LABELS: Record<string, string> = {
-  free: "Free",
-  pro: "Pro",
-  enterprise: "Enterprise",
-};
+const ALL_PLAN_FEATURES = ["analytics", "catalog", "payment-doc", "branding"] as const;
 
 export function AdminPanel({
   workspace,
@@ -327,12 +332,51 @@ export function AdminPanel({
                   <Badge variant="default">
                     {PLAN_LABELS[workspace.plan] ?? workspace.plan}
                   </Badge>
+                  <span className="text-sm text-muted-foreground">
+                    · {formatRub(getPlanConfig(workspace.plan).priceRub)}
+                    {getPlanConfig(workspace.plan).priceRub > 0 ? " / мес" : ""}
+                  </span>
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-sm text-muted-foreground">
                     Максимум пользователей:
                   </span>
                   <span className="font-medium">{workspace.max_users}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-muted-foreground">
+                    Максимум проектов:
+                  </span>
+                  <span className="font-medium">
+                    {getPlanConfig(workspace.plan).maxProjects == null
+                      ? "без ограничений"
+                      : getPlanConfig(workspace.plan).maxProjects}
+                  </span>
+                </div>
+                <div className="space-y-1.5">
+                  <span className="text-sm text-muted-foreground">
+                    Возможности плана:
+                  </span>
+                  <ul className="space-y-1 text-sm">
+                    {ALL_PLAN_FEATURES.map((feature) => {
+                      const included = hasFeature(workspace.plan, feature);
+                      return (
+                        <li
+                          key={feature}
+                          className={
+                            included ? "" : "text-muted-foreground"
+                          }
+                        >
+                          {included ? (
+                        <CheckCircle2 className="mr-1.5 inline h-4 w-4 text-green-600" />
+                      ) : (
+                        <XCircle className="mr-1.5 inline h-4 w-4" />
+                      )}
+                          {FEATURE_LABELS[feature]}
+                        </li>
+                      );
+                    })}
+                  </ul>
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-sm text-muted-foreground">
@@ -459,6 +503,7 @@ function WorkspaceSettings({ workspace }: { workspace: Workspace }) {
   const [name, setName] = useState(workspace.name);
   const [savingName, setSavingName] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const brandingLocked = !hasFeature(workspace.plan, "branding");
 
   async function handleSaveName(e: React.FormEvent) {
     e.preventDefault();
@@ -588,26 +633,40 @@ function WorkspaceSettings({ workspace }: { workspace: Workspace }) {
               </div>
             )}
             <div className="flex-1 space-y-2">
-              <label htmlFor="logo-upload">
-                <Button variant="outline" size="sm" asChild disabled={uploading}>
-                  <span className="cursor-pointer">
-                    <Upload className="mr-2 h-4 w-4" />
-                    {uploading ? "Загрузка..." : "Загрузить"}
-                  </span>
-                </Button>
-              </label>
-              <input
-                id="logo-upload"
-                type="file"
-                accept="image/png,image/jpeg,image/svg+xml,image/webp"
-                className="hidden"
-                onChange={handleLogoUpload}
-                disabled={uploading}
-              />
-              {workspace.logo_url && (
-                <Button variant="ghost" size="sm" onClick={handleRemoveLogo}>
-                  Удалить логотип
-                </Button>
+              {brandingLocked ? (
+                <div className="rounded-md border border-dashed p-3 text-center">
+                  <p className="flex items-center justify-center gap-1.5 text-sm text-muted-foreground">
+                    <Lock className="h-4 w-4" />
+                    Логотип доступен на тарифе Enterprise
+                  </p>
+                  <Button asChild variant="outline" size="sm" className="mt-2">
+                    <Link href="/pricing">Смотреть тарифы</Link>
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <label htmlFor="logo-upload">
+                    <Button variant="outline" size="sm" asChild disabled={uploading}>
+                      <span className="cursor-pointer">
+                        <Upload className="mr-2 h-4 w-4" />
+                        {uploading ? "Загрузка..." : "Загрузить"}
+                      </span>
+                    </Button>
+                  </label>
+                  <input
+                    id="logo-upload"
+                    type="file"
+                    accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                    className="hidden"
+                    onChange={handleLogoUpload}
+                    disabled={uploading}
+                  />
+                  {workspace.logo_url && (
+                    <Button variant="ghost" size="sm" onClick={handleRemoveLogo}>
+                      Удалить логотип
+                    </Button>
+                  )}
+                </>
               )}
               <p className="text-xs text-muted-foreground">
                 PNG, JPG, SVG или WebP. Макс. 2 МБ.
@@ -770,31 +829,45 @@ function CompanyDetailsSettings({ workspace }: { workspace: Workspace }) {
         <CardTitle className="flex items-center gap-2 text-base">
           <Building2 className="h-4 w-4" />
           Реквизиты организации
+          {!hasFeature(workspace.plan, "branding") && (
+            <Lock className="h-4 w-4 text-muted-foreground" />
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSave} className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            {COMPANY_FIELDS.map(({ key, label, placeholder }) => (
-              <div key={key} className="space-y-2">
-                <Label htmlFor={`cd-${key}`}>{label}</Label>
-                <Input
-                  id={`cd-${key}`}
-                  value={(details[key] as string) ?? ""}
-                  onChange={(e) => update(key, e.target.value)}
-                  placeholder={placeholder}
-                />
-              </div>
-            ))}
+        {hasFeature(workspace.plan, "branding") ? (
+          <form onSubmit={handleSave} className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              {COMPANY_FIELDS.map(({ key, label, placeholder }) => (
+                <div key={key} className="space-y-2">
+                  <Label htmlFor={`cd-${key}`}>{label}</Label>
+                  <Input
+                    id={`cd-${key}`}
+                    value={(details[key] as string) ?? ""}
+                    onChange={(e) => update(key, e.target.value)}
+                    placeholder={placeholder}
+                  />
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Эти реквизиты подставляются в документы на оплату по завершённым
+              проектам.
+            </p>
+            <Button type="submit" disabled={saving}>
+              {saving ? "Сохранение..." : "Сохранить реквизиты"}
+            </Button>
+          </form>
+        ) : (
+          <div className="flex flex-col items-center gap-3 py-10 text-center">
+            <p className="text-sm text-muted-foreground">
+              Реквизиты организации доступны на тарифе Enterprise.
+            </p>
+            <Button asChild size="sm">
+              <Link href="/pricing">Смотреть тарифы</Link>
+            </Button>
           </div>
-          <p className="text-xs text-muted-foreground">
-            Эти реквизиты подставляются в документы на оплату по завершённым
-            проектам.
-          </p>
-          <Button type="submit" disabled={saving}>
-            {saving ? "Сохранение..." : "Сохранить реквизиты"}
-          </Button>
-        </form>
+        )}
       </CardContent>
     </Card>
   );

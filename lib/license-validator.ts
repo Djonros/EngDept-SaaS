@@ -20,15 +20,10 @@
 // ============================================================================
 
 import { createAdminClient } from "./supabase-client";
+import { getPlanConfig } from "./plans";
 import type { License, Plan } from "./types";
 
 const ENCRYPTION_KEY = process.env.LICENSE_ENCRYPTION_KEY ?? "default-dev-key-change-me-32!";
-
-const PLANS: Record<Plan, { maxUsers: number; durationDays: number | null }> = {
-  free: { maxUsers: 5, durationDays: null },
-  pro: { maxUsers: 25, durationDays: 365 },
-  enterprise: { maxUsers: 100, durationDays: 365 },
-};
 
 // ---- Key generation (XXXX-XXXX-XXXX-XXXX) ----
 export function generateLicenseKey(): string {
@@ -82,7 +77,8 @@ export async function activateLicense(
   }
 
   const plan = existing.plan as Plan;
-  const durationDays = PLANS[plan].durationDays;
+  const planConfig = getPlanConfig(plan);
+  const durationDays = planConfig.durationDays;
   const expiresAt = durationDays
     ? new Date(Date.now() + durationDays * 86400000).toISOString()
     : null;
@@ -104,12 +100,13 @@ export async function activateLicense(
     return { success: false, error: "Не удалось активировать лицензию" };
   }
 
-  // Sync workspace plan + max_users
+  // Sync workspace plan + max_users + max_projects
   await supabase
     .from("workspaces")
     .update({
       plan: plan,
-      max_users: PLANS[plan].maxUsers,
+      max_users: planConfig.maxUsers,
+      max_projects: planConfig.maxProjects,
       license_key: key.toUpperCase().trim(),
       expires_at: expiresAt,
     })

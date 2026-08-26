@@ -20,8 +20,9 @@ import { createServerClient } from "@/lib/supabase-server";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Plus, ChevronRight, FolderKanban } from "lucide-react";
+import { Plus, ChevronRight, FolderKanban, Lock } from "lucide-react";
 import { ProjectFormDialog } from "@/components/project-form-dialog";
+import { getPlanConfig } from "@/lib/plans";
 import {
   PROJECT_STATUS_LABELS,
   type Project,
@@ -67,6 +68,11 @@ export default async function ProjectsPage() {
     };
   });
 
+  const maxProjects =
+    session.workspace.max_projects ??
+    getPlanConfig(session.workspace.plan).maxProjects;
+  const limitReached = maxProjects != null && list.length >= maxProjects;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -74,17 +80,40 @@ export default async function ProjectsPage() {
           <h1 className="text-2xl font-bold">Проекты</h1>
           <p className="text-muted-foreground">Управление проектами отдела</p>
         </div>
-        <ProjectFormDialog
-          mode="create"
-          workspaceId={wid}
-          trigger={
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Новый проект
-            </Button>
-          }
-        />
+        {limitReached ? (
+          <Button asChild variant="outline">
+            <Link href="/pricing">
+              <Lock className="mr-2 h-4 w-4" />
+              Лимит тарифа ({maxProjects})
+            </Link>
+          </Button>
+        ) : (
+          <ProjectFormDialog
+            mode="create"
+            workspaceId={wid}
+            trigger={
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                Новый проект
+              </Button>
+            }
+          />
+        )}
       </div>
+
+      {limitReached && (
+        <Card className="border-dashed">
+          <CardContent className="flex flex-col items-center justify-center gap-2 py-8 text-center">
+            <p className="text-sm text-muted-foreground">
+              Достигнут лимит бесплатного тарифа: {maxProjects} проектов.
+              Удалите ненужные проекты или обновите тариф.
+            </p>
+            <Button asChild size="sm">
+              <Link href="/pricing">Смотреть тарифы</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {list.length === 0 ? (
         <Card>

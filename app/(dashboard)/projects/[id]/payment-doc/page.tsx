@@ -18,6 +18,8 @@ import { notFound } from "next/navigation";
 import { requireSession } from "@/lib/session";
 import { createServerClient } from "@/lib/supabase-server";
 import { PaymentDocument } from "@/components/payment-document";
+import { PlanPaywall } from "@/components/plan-paywall";
+import { hasFeature } from "@/lib/plans";
 import type { CompanyDetails, Project, TaskWithRelations } from "@/lib/types";
 
 export default async function PaymentDocPage({
@@ -26,6 +28,9 @@ export default async function PaymentDocPage({
   params: { id: string };
 }) {
   const session = await requireSession();
+  if (!hasFeature(session.workspace.plan, "payment-doc")) {
+    return <PlanPaywall feature="payment-doc" />;
+  }
   const supabase = createServerClient();
   const wid = session.workspace.id;
 

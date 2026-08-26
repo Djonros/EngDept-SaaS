@@ -23,7 +23,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase-server";
 import { createAdminClient } from "@/lib/supabase-client";
-import type { UserRole } from "@/lib/types";
+import { getPlanConfig } from "@/lib/plans";
+import type { Plan, UserRole } from "@/lib/types";
 
 const VALID_ROLES: UserRole[] = [
   "owner",
@@ -99,6 +100,34 @@ export async function POST(request: NextRequest) {
 
     // Use admin client to search across all workspaces
     const admin = createAdminClient();
+
+    // Enforce workspace user limit (free plan; config is authoritative)
+    const { data: workspace } = await admin
+      .from("workspaces")
+      .select("plan, max_users")
+      .eq("id", caller.workspace_id)
+      .single();
+
+    if (workspace) {
+      const maxUsers = Math.min(
+        workspace.max_users ?? Number.MAX_SAFE_INTEGER,
+        getPlanConfig(workspace.plan as Plan).maxUsers
+      );
+      const { count } = await admin
+        .from("users")
+        .select("id", { count: "exact", head: true })
+        .eq("workspace_id", caller.workspace_id);
+
+      if ((count ?? 0) >= maxUsers) {
+        return NextResponse.json(
+          {
+            error: `Достигнут лимит пользователей тарифа (${maxUsers}). Улучшите тариф в разделе «Тарифы».`,
+          },
+          { status: 402 }
+        );
+      }
+    }
+
     const { data: existingUser } = await admin
       .from("users")
       .select("id, workspace_id, name, email")

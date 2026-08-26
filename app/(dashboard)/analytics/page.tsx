@@ -17,10 +17,15 @@
 import { requireStaffSession } from "@/lib/session";
 import { createServerClient } from "@/lib/supabase-server";
 import { AnalyticsView } from "@/components/analytics-view";
+import { PlanPaywall } from "@/components/plan-paywall";
+import { hasFeature } from "@/lib/plans";
 import { STAGE_ORDER, STAGE_LABELS } from "@/lib/types";
 
 export default async function AnalyticsPage() {
   const session = await requireStaffSession();
+  if (!hasFeature(session.workspace.plan, "analytics")) {
+    return <PlanPaywall feature="analytics" />;
+  }
   const supabase = createServerClient();
   const wid = session.workspace.id;
 

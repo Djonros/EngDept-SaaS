@@ -29,6 +29,8 @@ import {
   ClipboardCheck,
   LogOut,
   Building2,
+  Sparkles,
+  Lock,
 } from "lucide-react";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
@@ -37,28 +39,34 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import type { UserRole, Plan } from "@/lib/types";
 import { rolesLabel } from "@/lib/types";
+import { hasFeature, PLAN_LABELS, type PlanFeature } from "@/lib/plans";
 
 interface NavItem {
   label: string;
   href: string;
   icon: React.ElementType;
   roles: UserRole[];
+  feature?: PlanFeature;
 }
+
+const ALL_ROLES: UserRole[] = ["owner", "manager", "engineer", "reviewer", "freelancer"];
 
 const STAFF_NAV: NavItem[] = [
   { label: "Дашборд", href: "/dashboard", icon: LayoutDashboard, roles: ["owner", "manager", "engineer", "reviewer"] },
   { label: "Проекты", href: "/projects", icon: FolderKanban, roles: ["owner", "manager", "engineer", "reviewer"] },
   { label: "Задачи", href: "/tasks", icon: ListTodo, roles: ["owner", "manager", "engineer", "reviewer"] },
-  { label: "Каталог цен", href: "/catalog", icon: DollarSign, roles: ["owner", "manager"] },
-  { label: "Аналитика", href: "/analytics", icon: BarChart3, roles: ["owner", "manager"] },
+  { label: "Каталог цен", href: "/catalog", icon: DollarSign, roles: ["owner", "manager"], feature: "catalog" },
+  { label: "Аналитика", href: "/analytics", icon: BarChart3, roles: ["owner", "manager"], feature: "analytics" },
   { label: "СТП / Чек-листы", href: "/stp", icon: ClipboardCheck, roles: ["owner", "manager", "reviewer"] },
   { label: "Администрирование", href: "/admin", icon: ShieldCheck, roles: ["owner"] },
+  { label: "Тарифы", href: "/pricing", icon: Sparkles, roles: ALL_ROLES },
 ];
 
 const FREELANCER_NAV: NavItem[] = [
   { label: "Дашборд", href: "/dashboard", icon: LayoutDashboard, roles: ["freelancer"] },
   { label: "Мои задачи", href: "/my-tasks", icon: ListTodo, roles: ["freelancer"] },
   { label: "Мой кошелёк", href: "/my-wallet", icon: Wallet, roles: ["freelancer"] },
+  { label: "Тарифы", href: "/pricing", icon: Sparkles, roles: ["freelancer"] },
 ];
 
 interface SidebarProps {
@@ -125,7 +133,7 @@ export function Sidebar({ user, workspace, onSignOut }: SidebarProps) {
                 workspace.plan === "enterprise" ? "bg-purple-500" : workspace.plan === "pro" ? "bg-blue-500" : "bg-gray-400"
               )}
             />
-            <span className="text-xs text-muted-foreground capitalize">{workspace.plan}</span>
+            <span className="text-xs text-muted-foreground">{PLAN_LABELS[workspace.plan]}</span>
           </div>
         </div>
       </div>
@@ -137,6 +145,8 @@ export function Sidebar({ user, workspace, onSignOut }: SidebarProps) {
         {navItems
           .map((item) => {
             const active = pathname === item.href || pathname.startsWith(item.href + "/");
+            const locked =
+              item.feature != null && !hasFeature(workspace.plan, item.feature);
             return (
               <Link
                 key={item.href}
@@ -145,11 +155,15 @@ export function Sidebar({ user, workspace, onSignOut }: SidebarProps) {
                   "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                   active
                     ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                  locked && !active && "opacity-70"
                 )}
               >
                 <item.icon className="h-4 w-4 shrink-0" />
                 {item.label}
+                {locked && (
+                  <Lock className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                )}
               </Link>
             );
           })}

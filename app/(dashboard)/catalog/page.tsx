@@ -17,10 +17,15 @@
 import { requireStaffSession } from "@/lib/session";
 import { createServerClient } from "@/lib/supabase-server";
 import { CatalogManager } from "@/components/catalog-manager";
+import { PlanPaywall } from "@/components/plan-paywall";
+import { hasFeature } from "@/lib/plans";
 import type { PriceCatalogItem, PriceMultiplier } from "@/lib/types";
 
 export default async function CatalogPage() {
   const session = await requireStaffSession();
+  if (!hasFeature(session.workspace.plan, "catalog")) {
+    return <PlanPaywall feature="catalog" />;
+  }
   const supabase = createServerClient();
   const wid = session.workspace.id;
 
