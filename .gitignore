@@ -11,3 +11,6 @@ next-env.d.ts
 npm-debug.log*
 .vercel
 supabase/.temp
+*-dist.zip
+SQL
+generate-license.bat

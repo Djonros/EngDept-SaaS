@@ -22,7 +22,7 @@ import type { User, AuditLogEntry } from "@/lib/types";
 export default async function AdminPage() {
   const session = await requireSession();
 
-  if (session.role !== "owner") {
+  if (!session.roles.includes("owner")) {
     return (
       <div className="flex h-full items-center justify-center">
         <p className="text-muted-foreground">

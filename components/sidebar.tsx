@@ -36,7 +36,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import type { UserRole, Plan } from "@/lib/types";
-import { ROLE_LABELS } from "@/lib/types";
+import { rolesLabel } from "@/lib/types";
 
 interface NavItem {
   label: string;
@@ -66,7 +66,7 @@ interface SidebarProps {
     name: string;
     email: string;
     avatar_url: string | null;
-    role: UserRole;
+    roles: UserRole[];
   };
   workspace: {
     name: string;
@@ -78,8 +78,19 @@ interface SidebarProps {
 
 export function Sidebar({ user, workspace, onSignOut }: SidebarProps) {
   const pathname = usePathname();
-  const isFreelancer = user.role === "freelancer";
-  const navItems = isFreelancer ? FREELANCER_NAV : STAFF_NAV;
+  const roles = user.roles.length > 0 ? user.roles : (["engineer"] as UserRole[]);
+  const isFreelancerOnly =
+    roles.length === 1 && roles[0] === "freelancer";
+
+  const ALL_NAV = [
+    ...STAFF_NAV,
+    ...FREELANCER_NAV.filter(
+      (item) => !STAFF_NAV.some((s) => s.href === item.href)
+    ),
+  ];
+  const navItems = (isFreelancerOnly ? FREELANCER_NAV : ALL_NAV).filter(
+    (item) => item.roles.some((r) => roles.includes(r))
+  );
 
   const initials = user.name
     .split(" ")
@@ -124,7 +135,6 @@ export function Sidebar({ user, workspace, onSignOut }: SidebarProps) {
       {/* Navigation */}
       <nav className="flex-1 space-y-1 overflow-y-auto p-3">
         {navItems
-          .filter((item) => item.roles.includes(user.role))
           .map((item) => {
             const active = pathname === item.href || pathname.startsWith(item.href + "/");
             return (
@@ -156,7 +166,7 @@ export function Sidebar({ user, workspace, onSignOut }: SidebarProps) {
           </Avatar>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium">{user.name}</p>
-            <p className="truncate text-xs text-muted-foreground">{ROLE_LABELS[user.role]}</p>
+            <p className="truncate text-xs text-muted-foreground">{rolesLabel(user.roles)}</p>
           </div>
         </div>
         {onSignOut && (

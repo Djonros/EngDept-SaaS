@@ -30,7 +30,7 @@ export default async function FreelancerLayout({
         name: session.user.name,
         email: session.user.email,
         avatar_url: session.user.avatar_url,
-        role: session.role,
+        roles: session.roles,
       }}
       workspace={{
         name: session.workspace.name,

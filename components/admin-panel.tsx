@@ -44,13 +44,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
   TableBody,
@@ -75,6 +69,7 @@ import {
   type Workspace,
   type AuditLogEntry,
 } from "@/lib/types";
+import { hasRole } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
 
 interface AdminPanelProps {
@@ -109,17 +104,28 @@ export function AdminPanel({
   const [licenseKey, setLicenseKey] = useState("");
   const [activating, setActivating] = useState(false);
 
-  async function handleRoleChange(userId: string, role: UserRole) {
+  async function handleToggleRole(user: User, role: UserRole, checked: boolean) {
+    const current = user.roles ?? [user.role];
+    let next: UserRole[];
+    if (checked) {
+      next = current.includes(role) ? current : [...current, role];
+    } else {
+      next = current.filter((r) => r !== role);
+    }
+    if (next.length === 0) {
+      toast.error("У пользователя должна остаться хотя бы одна роль");
+      return;
+    }
     const res = await fetch("/api/admin/update-role", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId, role }),
+      body: JSON.stringify({ userId: user.id, roles: next }),
     });
     const data = await res.json();
     if (!res.ok) {
       toast.error(data.error || "Ошибка");
     } else {
-      toast.success("Роль обновлена");
+      toast.success("Роли обновлены");
       router.refresh();
     }
   }
@@ -145,56 +151,22 @@ export function AdminPanel({
       return;
     }
     setActivating(true);
-    const supabase = createBrowserClient();
-    const { data, error } = await supabase
-      .from("licenses")
-      .select("*")
-      .eq("key", licenseKey.toUpperCase().trim())
-      .single();
-
-    if (error || !data) {
-      toast.error("Лицензионный ключ не найден");
-      setActivating(false);
-      return;
-    }
-
-    if (data.status === "revoked") {
-      toast.error("Лицензия отозвана");
-      setActivating(false);
-      return;
-    }
-
-    if (data.workspace_id && data.workspace_id !== workspace.id) {
-      toast.error("Ключ уже привязан к другому workspace");
-      setActivating(false);
-      return;
-    }
-
-    const expiresAt = data.expires_at;
-    const { error: updateErr } = await supabase
-      .from("workspaces")
-      .update({
-        plan: data.plan,
-        license_key: data.key,
-        expires_at: expiresAt,
-      })
-      .eq("id", workspace.id);
-
-    if (updateErr) {
-      toast.error("Ошибка активации");
-    } else {
-      await supabase
-        .from("licenses")
-        .update({
-          workspace_id: workspace.id,
-          status: "active",
-          activated_at: new Date().toISOString(),
-        })
-        .eq("id", data.id);
-
-      toast.success("Лицензия активирована");
-      setLicenseKey("");
-      router.refresh();
+    try {
+      const res = await fetch("/api/admin/activate-license", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ licenseKey: licenseKey.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Ошибка активации");
+      } else {
+        toast.success("Лицензия активирована");
+        setLicenseKey("");
+        router.refresh();
+      }
+    } catch {
+      toast.error("Ошибка сети");
     }
     setActivating(false);
   }
@@ -283,23 +255,22 @@ export function AdminPanel({
                         {user.email}
                       </TableCell>
                       <TableCell>
-                        <Select
-                          value={user.role}
-                          onValueChange={(v) =>
-                            handleRoleChange(user.id, v as UserRole)
-                          }
-                        >
-                          <SelectTrigger className="w-36">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {ROLES.map((r) => (
-                              <SelectItem key={r} value={r}>
-                                {ROLE_LABELS[r]}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <div className="flex flex-col gap-1">
+                          {ROLES.map((r) => (
+                            <label
+                              key={r}
+                              className="flex cursor-pointer items-center gap-1.5 text-xs"
+                            >
+                              <Checkbox
+                                checked={hasRole(user.roles, r) || user.role === r}
+                                onCheckedChange={(checked) =>
+                                  handleToggleRole(user, r, checked === true)
+                                }
+                              />
+                              {ROLE_LABELS[r]}
+                            </label>
+                          ))}
+                        </div>
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {user.telegram_id ?? "—"}
@@ -321,7 +292,7 @@ export function AdminPanel({
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        {user.role !== "owner" && (
+                        {!hasRole(user.roles, "owner") && user.role !== "owner" && (
                           <Button
                             variant="ghost"
                             size="sm"
@@ -656,18 +627,32 @@ function AddUserForm({
 }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState<UserRole>("engineer");
+  const [roles, setRoles] = useState<UserRole[]>(["engineer"]);
   const [saving, setSaving] = useState(false);
+
+  function toggleRole(role: UserRole, checked: boolean) {
+    setRoles((prev) =>
+      checked
+        ? prev.includes(role)
+          ? prev
+          : [...prev, role]
+        : prev.filter((r) => r !== role)
+    );
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!email.trim()) return;
+    if (roles.length === 0) {
+      toast.error("Выберите хотя бы одну роль");
+      return;
+    }
     setSaving(true);
     try {
       const res = await fetch("/api/admin/add-user", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), role }),
+        body: JSON.stringify({ email: email.trim(), roles }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -701,19 +686,21 @@ function AddUserForm({
         />
       </div>
       <div className="space-y-2">
-        <Label>Роль</Label>
-        <Select value={role} onValueChange={(v) => setRole(v as UserRole)}>
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {ROLES.map((r) => (
-              <SelectItem key={r} value={r}>
-                {ROLE_LABELS[r]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Label>Роли</Label>
+        <div className="space-y-1.5">
+          {ROLES.map((r) => (
+            <label key={r} className="flex cursor-pointer items-center gap-2 text-sm">
+              <Checkbox
+                checked={roles.includes(r)}
+                onCheckedChange={(checked) => toggleRole(r, checked === true)}
+              />
+              {ROLE_LABELS[r]}
+            </label>
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Можно выбрать несколько ролей одновременно.
+        </p>
       </div>
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onClose}>

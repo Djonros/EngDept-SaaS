@@ -79,11 +79,17 @@ export async function middleware(request: NextRequest) {
   ) {
     const { data: profile } = await supabase
       .from("users")
-      .select("role")
+      .select("role, roles")
       .eq("id", user.id)
       .single();
 
-    if (profile?.role === "freelancer") {
+    const roles =
+      (profile?.roles as string[] | null) ??
+      (profile?.role ? [profile.role] : []);
+    const isFreelancerOnly =
+      roles.length === 0 || (roles.length === 1 && roles[0] === "freelancer");
+
+    if (isFreelancerOnly) {
       const url = request.nextUrl.clone();
       url.pathname = "/my-tasks";
       return NextResponse.redirect(url);

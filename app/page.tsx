@@ -22,7 +22,8 @@ export default async function HomePage() {
 
   if (!session) redirect("/login");
 
-  if (session.role === "freelancer") redirect("/my-tasks");
+  if (session.roles.includes("freelancer") && session.roles.length === 1)
+    redirect("/my-tasks");
 
   redirect("/dashboard");
 }

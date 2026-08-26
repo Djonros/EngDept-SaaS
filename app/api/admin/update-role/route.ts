@@ -16,7 +16,7 @@
 
 // ============================================================================
 //  POST /api/admin/update-role
-//  Changes a user's role within the workspace (including owner role changes).
+//  Sets a user's roles (array) within the workspace — supports multiple roles.
 //  Uses service role key to bypass RLS (allows owner role mutations).
 // ============================================================================
 
@@ -35,21 +35,30 @@ const VALID_ROLES: UserRole[] = [
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId, role } = (await request.json()) as {
+    const { userId, roles, role } = (await request.json()) as {
       userId?: string;
+      roles?: string[];
       role?: string;
     };
 
+    // Accept either roles[] or single role (backwards compatible)
+    const newRoles = (roles ?? (role ? [role] : [])) as UserRole[];
+
     if (!userId) {
+      return NextResponse.json({ error: "userId обязателен" }, { status: 400 });
+    }
+
+    if (newRoles.length === 0) {
       return NextResponse.json(
-        { error: "userId обязателен" },
+        { error: "Нужна хотя бы одна роль" },
         { status: 400 }
       );
     }
 
-    if (!role || !VALID_ROLES.includes(role as UserRole)) {
+    const invalid = newRoles.find((r) => !VALID_ROLES.includes(r));
+    if (invalid) {
       return NextResponse.json(
-        { error: "Некорректная роль" },
+        { error: "Некорректная роль: " + invalid },
         { status: 400 }
       );
     }
@@ -61,19 +70,21 @@ export async function POST(request: NextRequest) {
     } = await serverClient.auth.getUser();
 
     if (!authUser) {
-      return NextResponse.json(
-        { error: "Не авторизован" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
     }
 
     const { data: caller } = await serverClient
       .from("users")
-      .select("id, workspace_id, role")
+      .select("id, workspace_id, role, roles")
       .eq("id", authUser.id)
       .single();
 
-    if (!caller || (caller.role !== "owner" && caller.role !== "manager")) {
+    const callerRoles =
+      (caller?.roles as UserRole[] | null) ?? (caller ? [caller.role as UserRole] : []);
+    const canManage =
+      callerRoles.includes("owner") || callerRoles.includes("manager");
+
+    if (!caller || !canManage) {
       return NextResponse.json(
         { error: "Недостаточно прав" },
         { status: 403 }
@@ -83,10 +94,9 @@ export async function POST(request: NextRequest) {
     // Use admin client — allows changing any user including owner
     const admin = createAdminClient();
 
-    // If demoting an owner, check they're not the last owner
     const { data: targetUser } = await admin
       .from("users")
-      .select("id, workspace_id, role")
+      .select("id, workspace_id, role, roles")
       .eq("id", userId)
       .single();
 
@@ -97,12 +107,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (targetUser.role === "owner" && role !== "owner") {
+    const targetRoles =
+      (targetUser.roles as UserRole[] | null) ?? [targetUser.role as UserRole];
+
+    // If removing owner role, check they're not the last owner
+    if (targetRoles.includes("owner") && !newRoles.includes("owner")) {
       const { count } = await admin
         .from("users")
         .select("id", { count: "exact", head: true })
         .eq("workspace_id", caller.workspace_id)
-        .eq("role", "owner");
+        .contains("roles", ["owner"]);
 
       if ((count ?? 0) <= 1) {
         return NextResponse.json(
@@ -112,9 +126,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Primary role = first in array; keep roles array in sync
     const { error: updateErr } = await admin
       .from("users")
-      .update({ role: role as UserRole })
+      .update({ roles: newRoles, role: newRoles[0] })
       .eq("id", userId);
 
     if (updateErr) {

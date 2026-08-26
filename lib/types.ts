@@ -70,6 +70,7 @@ export interface User {
   name: string;
   email: string;
   role: UserRole;
+  roles: UserRole[];
   telegram_id: string | null;
   avatar_url: string | null;
   is_active: boolean;
@@ -254,3 +255,18 @@ export const APPLIES_TO_LABELS: Record<string, string> = {
   calc: "Расчёты",
   documentation: "Документация",
 };
+
+export function hasRole(roles: UserRole[] | undefined | null, role: UserRole): boolean {
+  if (!roles || roles.length === 0) return false;
+  return roles.includes(role);
+}
+
+export function hasAnyRole(roles: UserRole[] | undefined | null, check: UserRole[]): boolean {
+  if (!roles || roles.length === 0) return false;
+  return check.some((r) => roles.includes(r));
+}
+
+export function rolesLabel(roles: UserRole[] | undefined | null): string {
+  if (!roles || roles.length === 0) return "—";
+  return roles.map((r) => ROLE_LABELS[r]).join(", ");
+}

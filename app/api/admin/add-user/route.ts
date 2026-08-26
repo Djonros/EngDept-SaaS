@@ -35,10 +35,14 @@ const VALID_ROLES: UserRole[] = [
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, role } = (await request.json()) as {
+    const { email, roles, role } = (await request.json()) as {
       email?: string;
+      roles?: string[];
       role?: string;
     };
+
+    // Accept either roles[] or single role (backwards compatible)
+    const newRoles = (roles ?? (role ? [role] : [])) as UserRole[];
 
     if (!email || !email.trim()) {
       return NextResponse.json(
@@ -47,9 +51,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!role || !VALID_ROLES.includes(role as UserRole)) {
+    if (newRoles.length === 0) {
       return NextResponse.json(
-        { error: "Некорректная роль" },
+        { error: "Нужна хотя бы одна роль" },
+        { status: 400 }
+      );
+    }
+
+    const invalid = newRoles.find((r) => !VALID_ROLES.includes(r));
+    if (invalid) {
+      return NextResponse.json(
+        { error: "Некорректная роль: " + invalid },
         { status: 400 }
       );
     }
@@ -69,11 +81,16 @@ export async function POST(request: NextRequest) {
 
     const { data: caller } = await serverClient
       .from("users")
-      .select("id, workspace_id, role")
+      .select("id, workspace_id, role, roles")
       .eq("id", authUser.id)
       .single();
 
-    if (!caller || (caller.role !== "owner" && caller.role !== "manager")) {
+    const callerRoles =
+      (caller?.roles as UserRole[] | null) ?? (caller ? [caller.role as UserRole] : []);
+    const canManage =
+      callerRoles.includes("owner") || callerRoles.includes("manager");
+
+    if (!caller || !canManage) {
       return NextResponse.json(
         { error: "Недостаточно прав" },
         { status: 403 }
@@ -105,12 +122,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Move user to caller's workspace with new role
+    // Move user to caller's workspace with new roles
     const { error: updateErr } = await admin
       .from("users")
       .update({
         workspace_id: caller.workspace_id,
-        role: role as UserRole,
+        roles: newRoles,
+        role: newRoles[0],
         is_active: true,
       })
       .eq("id", existingUser.id);

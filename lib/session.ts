@@ -19,13 +19,14 @@
 // ============================================================================
 
 import { redirect } from "next/navigation";
-import type { User, Workspace, UserRole } from "./types";
+import type { User, UserRole, Workspace } from "./types";
 import { createServerClient } from "./supabase-server";
 
 export interface Session {
   user: User;
   workspace: Workspace;
   role: UserRole;
+  roles: UserRole[];
 }
 
 export async function getSession(): Promise<Session | null> {
@@ -81,6 +82,7 @@ export async function getSession(): Promise<Session | null> {
     user: user as User,
     workspace: workspace as Workspace,
     role: user.role,
+    roles: (user.roles as UserRole[]) ?? [user.role],
   };
 }
 
@@ -93,6 +95,7 @@ export async function requireSession(): Promise<Session> {
 // Freelancers see only their own tasks
 export async function requireStaffSession(): Promise<Session> {
   const session = await requireSession();
-  if (session.role === "freelancer") redirect("/my-tasks");
+  if (session.roles.includes("freelancer") && session.roles.length === 1)
+    redirect("/my-tasks");
   return session;
 }

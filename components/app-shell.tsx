@@ -27,7 +27,7 @@ interface AppShellProps {
     name: string;
     email: string;
     avatar_url: string | null;
-    role: UserRole;
+    roles: UserRole[];
   };
   workspace: {
     name: string;
