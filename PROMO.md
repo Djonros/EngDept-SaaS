@@ -43,14 +43,14 @@
 инжиниринговые компании, машиностроительные предприятия, студии
 промышленного дизайна, команды, работающие с внешними фрилансерами.
 
-**Технологии:** Next.js 14, TypeScript, Supabase (PostgreSQL), Tailwind CSS,
-shadcn/ui, Recharts. Разворачивается на любом сервере с Node.js.
+**Технологии:** Next.js 14, TypeScript, SQLite (встроенная БД, без внешних
+сервисов), Tailwind CSS, shadcn/ui, Recharts. Разворачивается на любом
+компьютере или сервере с Node.js.
 
 **Установка под Windows:** распакуйте дистрибутив и запустите `install.bat`
-(настроит окружение и файл `.env`, нужно только Node.js и бесплатный аккаунт
-Supabase), затем `start.bat` — сервер запустится и откроется в браузере.
-Для Linux/macOS — тот же дистрибутив: примените SQL-миграции из папки
-`migrations` и запустите `node server.js`.
+(настроит файл `.env`, нужен только Node.js), затем `start.bat` — сервер
+запустится и откроется в браузере. База данных создаётся автоматически
+при первом запуске. Для Linux/macOS: `cd app && node server.js`.
 
 **Лицензия:** проприетарное ПО. Контакты для лицензирования и демонстрации:
 [djonros@gmail.com](mailto:djonros@gmail.com)
@@ -65,7 +65,7 @@ Supabase), затем `start.bat` — сервер запустится и от�
 отделом: kanban-доска задач по этапам (ТЗ, 3D, 2D, расчёты, нормоконтроль),
 команды проектов с ролями, чек-листы СТП, каталог цен и автоматический расчёт
 стоимости, готовые документы на оплату, портал фрилансеров, аналитика и аудит.
-Multi-tenant, разворачивается на своём сервере. Next.js + Supabase.
+Multi-tenant, разворачивается на своём сервере. Next.js + SQLite.
 
 Контакты: [djonros@gmail.com](mailto:djonros@gmail.com)
 
@@ -90,16 +90,16 @@ in one workspace.
 - Price catalog with complexity multipliers, automatic task cost calculation
 - One-click printable payment document (A4 / PDF) with company requisites
 - Freelancer portal: external contractors see only their tasks and wallet
-- Multi-tenant with database-level row security (RLS)
+- Multi-tenant with application-level workspace isolation
 - Workspace branding, audit log, analytics dashboard
 - Optional Telegram bot notifications
 
-**Tech stack:** Next.js 14, TypeScript, Supabase (PostgreSQL), Tailwind CSS.
+**Tech stack:** Next.js 14, TypeScript, SQLite (embedded DB, zero external services), Tailwind CSS.
 
 **Installation (Windows):** unpack the distribution and run `install.bat`
-(it sets up the environment and `.env`; only Node.js and a free Supabase
-account required), then run `start.bat`. On Linux/macOS apply the SQL
-migrations from the `migrations` folder and run `node server.js`.
+(it sets up `.env`; only Node.js required), then run `start.bat`. The
+database is created automatically on first start. On Linux/macOS:
+`cd app && node server.js`.
 
 **License:** proprietary. Licensing & demo inquiries: [djonros@gmail.com](mailto:djonros@gmail.com)
 
