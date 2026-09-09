@@ -15,7 +15,7 @@
 // ============================================================================
 
 import { requireStaffSession } from "@/lib/session";
-import { createServerClient } from "@/lib/supabase-server";
+import { listCatalog, listMultipliers } from "@/lib/repo";
 import { CatalogManager } from "@/components/catalog-manager";
 import { PlanPaywall } from "@/components/plan-paywall";
 import { hasFeature } from "@/lib/plans";
@@ -26,27 +26,15 @@ export default async function CatalogPage() {
   if (!hasFeature(session.workspace.plan, "catalog")) {
     return <PlanPaywall feature="catalog" />;
   }
-  const supabase = createServerClient();
   const wid = session.workspace.id;
 
-  const [{ data: items }, { data: multipliers }] = await Promise.all([
-    supabase
-      .from("price_catalog")
-      .select("*")
-      .eq("workspace_id", wid)
-      .order("category")
-      .order("operation_name"),
-    supabase
-      .from("price_multipliers")
-      .select("*")
-      .eq("workspace_id", wid)
-      .order("name"),
-  ]);
+  const items = listCatalog(wid) as PriceCatalogItem[];
+  const multipliers = listMultipliers(wid) as PriceMultiplier[];
 
   return (
     <CatalogManager
-      items={(items ?? []) as PriceCatalogItem[]}
-      multipliers={(multipliers ?? []) as PriceMultiplier[]}
+      items={items}
+      multipliers={multipliers}
       workspaceId={wid}
     />
   );

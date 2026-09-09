@@ -19,7 +19,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
-import { createBrowserClient } from "@/lib/supabase-client";
 import { toast } from "@/components/ui/toast";
 import {
   Dialog,
@@ -78,7 +77,6 @@ function fromVal(v: string): string | null {
 export function TaskFormDialog({
   mode,
   task,
-  workspaceId,
   defaultProjectId,
   options,
   trigger,
@@ -122,10 +120,8 @@ export function TaskFormDialog({
     }
 
     setSaving(true);
-    const supabase = createBrowserClient();
 
     const payload = {
-      workspace_id: workspaceId,
       project_id: projectId,
       milestone_id: fromVal(milestoneId),
       stage,
@@ -138,25 +134,29 @@ export function TaskFormDialog({
       yandex_disk_link: diskLink.trim() || null,
     };
 
-    if (mode === "create") {
-      const { error } = await supabase.from("tasks").insert(payload);
-      if (error) {
-        toast.error("Ошибка создания задачи: " + error.message);
+    try {
+      const res = await fetch(
+        mode === "create" ? "/api/tasks" : `/api/tasks/${task!.id}`,
+        {
+          method: mode === "create" ? "POST" : "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(
+          (mode === "create" ? "Ошибка создания задачи: " : "Ошибка обновления: ") +
+            (data.error || "неизвестная")
+        );
         setSaving(false);
         return;
       }
-      toast.success("Задача создана");
-    } else {
-      const { error } = await supabase
-        .from("tasks")
-        .update(payload)
-        .eq("id", task!.id);
-      if (error) {
-        toast.error("Ошибка обновления: " + error.message);
-        setSaving(false);
-        return;
-      }
-      toast.success("Задача обновлена");
+      toast.success(mode === "create" ? "Задача создана" : "Задача обновлена");
+    } catch {
+      toast.error("Ошибка сети");
+      setSaving(false);
+      return;
     }
 
     setSaving(false);

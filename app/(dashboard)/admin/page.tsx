@@ -15,7 +15,7 @@
 // ============================================================================
 
 import { requireSession } from "@/lib/session";
-import { createServerClient } from "@/lib/supabase-server";
+import { listAuditLog, listWorkspaceUsers } from "@/lib/repo";
 import { AdminPanel } from "@/components/admin-panel";
 import type { User, AuditLogEntry } from "@/lib/types";
 
@@ -32,28 +32,16 @@ export default async function AdminPage() {
     );
   }
 
-  const supabase = createServerClient();
   const wid = session.workspace.id;
 
-  const [{ data: users }, { data: auditLog }] = await Promise.all([
-    supabase
-      .from("users")
-      .select("*")
-      .eq("workspace_id", wid)
-      .order("created_at", { ascending: true }),
-    supabase
-      .from("audit_log")
-      .select("*")
-      .eq("workspace_id", wid)
-      .order("created_at", { ascending: false })
-      .limit(100),
-  ]);
+  const users = listWorkspaceUsers(wid);
+  const auditLog = listAuditLog(wid, 100);
 
   return (
     <AdminPanel
       workspace={session.workspace}
-      users={(users ?? []) as unknown as User[]}
-      auditLog={(auditLog ?? []) as unknown as AuditLogEntry[]}
+      users={users as unknown as User[]}
+      auditLog={auditLog as unknown as AuditLogEntry[]}
       currentUserId={session.user.id}
     />
   );

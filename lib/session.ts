@@ -15,75 +15,19 @@
 // ============================================================================
 
 // ============================================================================
-//  Session helper — gets current user + workspace in Server Components
+//  Session helper — reads own cookie session in Server Components
 // ============================================================================
 
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import type { User, UserRole, Workspace } from "./types";
-import { createServerClient } from "./supabase-server";
+import { getSessionByToken, SESSION_COOKIE, type SessionData } from "./auth";
 
-export interface Session {
-  user: User;
-  workspace: Workspace;
-  role: UserRole;
-  roles: UserRole[];
-}
+export type Session = SessionData;
 
 export async function getSession(): Promise<Session | null> {
-  const supabase = createServerClient();
-
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
-
-  if (!authUser) return null;
-
-  let { data: user } = await supabase
-    .from("users")
-    .select("*")
-    .eq("id", authUser.id)
-    .single();
-
-  // Auto-create profile if missing (e.g. after email confirmation)
-  if (!user) {
-    const wsName = (authUser.user_metadata as Record<string, string>)?.workspace_name
-      || "Моя организация";
-    const fullName = (authUser.user_metadata as Record<string, string>)?.full_name
-      || authUser.email
-      || "Пользователь";
-
-    if (wsName) {
-      await supabase.rpc("create_workspace_with_owner", {
-        p_workspace_name: wsName,
-        p_user_name: fullName,
-        p_user_email: authUser.email ?? "",
-      });
-
-      const { data: retry } = await supabase
-        .from("users")
-        .select("*")
-        .eq("id", authUser.id)
-        .single();
-      user = retry;
-    }
-  }
-
-  if (!user || !user.is_active) return null;
-
-  const { data: workspace } = await supabase
-    .from("workspaces")
-    .select("*")
-    .eq("id", user.workspace_id)
-    .single();
-
-  if (!workspace) return null;
-
-  return {
-    user: user as User,
-    workspace: workspace as Workspace,
-    role: user.role,
-    roles: (user.roles as UserRole[]) ?? [user.role],
-  };
+  const store = cookies();
+  const token = store.get(SESSION_COOKIE)?.value;
+  return getSessionByToken(token);
 }
 
 export async function requireSession(): Promise<Session> {

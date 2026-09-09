@@ -15,51 +15,33 @@
 // ============================================================================
 
 import { requireSession } from "@/lib/session";
-import { createServerClient } from "@/lib/supabase-server";
+import { listMilestonesForWorkspace, listProjects, listTasks } from "@/lib/repo";
 import { MyTasksView } from "@/components/my-tasks-view";
 import type { TaskFormOptions } from "@/components/task-form-dialog";
 import type { TaskWithRelations } from "@/lib/types";
 
 export default async function MyTasksPage() {
   const session = await requireSession();
-  const supabase = createServerClient();
   const wid = session.workspace.id;
 
-  const [{ data: tasks }, { data: projects }] = await Promise.all([
-    supabase
-      .from("tasks")
-      .select(
-        `*,
-        assignee:users!assignee_id(id, name, avatar_url),
-        reviewer:users!reviewer_id(id, name, avatar_url),
-        project:projects(id, title),
-        milestone:milestones(id, title)`
-      )
-      .eq("workspace_id", wid)
-      .eq("assignee_id", session.user.id)
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("projects")
-      .select("id, title")
-      .eq("workspace_id", wid)
-      .eq("status", "active"),
-  ]);
-
-  const projectIds = (projects ?? []).map((p) => p.id);
-  const { data: milestones } = await supabase
-    .from("milestones")
-    .select("id, title, project_id")
-    .in("project_id", projectIds);
+  const tasks = listTasks(wid, { assigneeId: session.user.id });
+  const projects = listProjects(wid)
+    .filter((p) => p.status === "active")
+    .map((p) => ({ id: p.id, title: p.title }));
+  const activeIds = new Set(projects.map((p) => p.id));
+  const milestones = listMilestonesForWorkspace(wid)
+    .filter((m) => activeIds.has(m.project_id))
+    .map((m) => ({ id: m.id, title: m.title, project_id: m.project_id }));
 
   const options: TaskFormOptions = {
-    projects: projects ?? [],
-    milestones: milestones ?? [],
+    projects,
+    milestones,
     users: [{ id: session.user.id, name: session.user.name }],
   };
 
   return (
     <MyTasksView
-      tasks={(tasks ?? []) as unknown as TaskWithRelations[]}
+      tasks={tasks as unknown as TaskWithRelations[]}
       workspaceId={wid}
       options={options}
     />

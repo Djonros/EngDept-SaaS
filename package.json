@@ -9,7 +9,7 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "bot": "tsx bot/index.ts",
-    "db:push": "supabase db push"
+    "sign-license": "node tools/sign-license.mjs"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.0",
@@ -23,8 +23,7 @@
     "@radix-ui/react-slot": "^1.1.0",
     "@radix-ui/react-tabs": "^1.1.0",
     "@radix-ui/react-tooltip": "^1.1.2",
-    "@supabase/ssr": "^0.5.1",
-    "@supabase/supabase-js": "^2.45.4",
+    "better-sqlite3": "^13.0.3",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "grammy": "^1.29.0",
@@ -37,6 +36,7 @@
     "tailwindcss-animate": "^1.0.7"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^20.16.5",
     "@types/react": "^18.3.7",
     "@types/react-dom": "^18.3.0",

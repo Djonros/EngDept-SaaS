@@ -16,7 +16,13 @@
 
 import { notFound } from "next/navigation";
 import { requireSession } from "@/lib/session";
-import { createServerClient } from "@/lib/supabase-server";
+import {
+  listMilestonesForProject,
+  listProjectMembers,
+  listTasks,
+  getProject,
+  listWorkspaceUsers,
+} from "@/lib/repo";
 import { ProjectDetailView } from "@/components/project-detail-view";
 import type { Project, ProjectMemberWithUser, TaskWithRelations } from "@/lib/types";
 
@@ -26,59 +32,33 @@ export default async function ProjectDetailPage({
   params: { id: string };
 }) {
   const session = await requireSession();
-  const supabase = createServerClient();
   const wid = session.workspace.id;
 
-  const [{ data: project, error }, { data: tasks }, { data: milestones }, { data: users }, { data: members }] =
-    await Promise.all([
-      supabase
-        .from("projects")
-        .select("*")
-        .eq("id", params.id)
-        .eq("workspace_id", wid)
-        .single(),
-      supabase
-        .from("tasks")
-        .select(
-          `*,
-          assignee:users!assignee_id(id, name, avatar_url),
-          reviewer:users!reviewer_id(id, name, avatar_url),
-          project:projects(id, title),
-          milestone:milestones(id, title)`
-        )
-        .eq("project_id", params.id)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("milestones")
-        .select("id, title, project_id")
-        .eq("project_id", params.id)
-        .order("order_index"),
-      supabase
-        .from("users")
-        .select("id, name")
-        .eq("workspace_id", wid)
-        .eq("is_active", true)
-        .order("name"),
-      supabase
-        .from("project_members_with_user")
-        .select("*")
-        .eq("project_id", params.id)
-        .order("created_at", { ascending: false }),
-    ]);
+  const project = getProject(wid, params.id);
+  if (!project) notFound();
 
-  if (error || !project) notFound();
+  const tasks = listTasks(wid, { projectId: params.id });
+  const milestones = listMilestonesForProject(wid, params.id).map((m) => ({
+    id: m.id,
+    title: m.title,
+    project_id: m.project_id,
+  }));
+  const users = listWorkspaceUsers(wid)
+    .filter((u) => u.is_active)
+    .map((u) => ({ id: u.id, name: u.name }));
+  const members = listProjectMembers(wid, params.id);
 
   return (
     <ProjectDetailView
       project={project as Project}
-      tasks={(tasks ?? []) as unknown as TaskWithRelations[]}
-      milestones={milestones ?? []}
-      members={(members ?? []) as unknown as ProjectMemberWithUser[]}
+      tasks={tasks as unknown as TaskWithRelations[]}
+      milestones={milestones}
+      members={members as unknown as ProjectMemberWithUser[]}
       workspaceId={wid}
       options={{
-        projects: [{ id: (project as Project).id, title: (project as Project).title }],
-        milestones: milestones ?? [],
-        users: users ?? [],
+        projects: [{ id: project.id, title: project.title }],
+        milestones,
+        users,
       }}
     />
   );

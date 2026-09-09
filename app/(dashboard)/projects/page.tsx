@@ -16,7 +16,7 @@
 
 import Link from "next/link";
 import { requireSession } from "@/lib/session";
-import { createServerClient } from "@/lib/supabase-server";
+import { listProjects, listTasks } from "@/lib/repo";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -44,25 +44,18 @@ interface ProjectWithStats extends Project {
 
 export default async function ProjectsPage() {
   const session = await requireSession();
-  const supabase = createServerClient();
   const wid = session.workspace.id;
 
-  const [{ data: projects }, { data: taskStats }] = await Promise.all([
-    supabase
-      .from("projects")
-      .select("*")
-      .eq("workspace_id", wid)
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("tasks")
-      .select("project_id, stage")
-      .eq("workspace_id", wid),
-  ]);
+  const projects = listProjects(wid);
+  const taskStats = listTasks(wid).map((t) => ({
+    project_id: t.project_id,
+    stage: t.stage,
+  }));
 
-  const list: ProjectWithStats[] = (projects ?? []).map((p) => {
-    const pt = (taskStats ?? []).filter((t) => t.project_id === p.id);
+  const list: ProjectWithStats[] = projects.map((p) => {
+    const pt = taskStats.filter((t) => t.project_id === p.id);
     return {
-      ...(p as Project),
+      ...p,
       taskCount: pt.length,
       doneCount: pt.filter((t) => t.stage === "done").length,
     };

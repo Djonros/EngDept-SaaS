@@ -20,7 +20,6 @@ import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Building2, Loader2 } from "lucide-react";
-import { createBrowserClient } from "@/lib/supabase-client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -42,22 +41,21 @@ function LoginForm() {
     setError(null);
 
     try {
-      const supabase = createBrowserClient();
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
       });
-
-      if (signInError) {
-        setError(signInError.message);
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Ошибка входа");
         setLoading(false);
         return;
       }
-
       router.push(redirectUrl);
       router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Произошла ошибка при входе");
+    } catch {
+      setError("Ошибка сети");
       setLoading(false);
     }
   }

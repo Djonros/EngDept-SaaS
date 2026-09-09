@@ -15,7 +15,7 @@
 // ============================================================================
 
 import { requireSession } from "@/lib/session";
-import { createServerClient } from "@/lib/supabase-server";
+import { getStpChecklists } from "@/lib/repo";
 import { StpManager } from "@/components/stp-manager";
 import {
   STAGE_ORDER,
@@ -25,18 +25,13 @@ import {
 
 export default async function StpPage() {
   const session = await requireSession();
-  const supabase = createServerClient();
   const wid = session.workspace.id;
 
-  const { data } = await supabase
-    .from("stp_checklists")
-    .select("stage, items")
-    .eq("workspace_id", wid);
+  const data = getStpChecklists(wid);
 
   const checklists = STAGE_ORDER.reduce(
     (acc, stage) => {
-      const row = data?.find((r) => r.stage === stage);
-      acc[stage] = (row?.items ?? []) as StpChecklistItem[];
+      acc[stage] = (data[stage] ?? []) as StpChecklistItem[];
       return acc;
     },
     {} as Record<TaskStage, StpChecklistItem[]>

@@ -19,7 +19,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Trash2, GripVertical, Loader2 } from "lucide-react";
-import { createBrowserClient } from "@/lib/supabase-client";
 import { toast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,7 +43,7 @@ interface StpManagerProps {
   workspaceId: string;
 }
 
-export function StpManager({ checklists, workspaceId }: StpManagerProps) {
+export function StpManager({ checklists }: StpManagerProps) {
   const router = useRouter();
   const [activeStage, setActiveStage] = useState<TaskStage>(STAGE_ORDER[0]);
   const [items, setItems] = useState(checklists);
@@ -95,30 +94,17 @@ export function StpManager({ checklists, workspaceId }: StpManagerProps) {
 
   async function saveStage(stage: TaskStage, stageItems: StpChecklistItem[]) {
     setSaving(true);
-    const supabase = createBrowserClient();
-
-    const existing = await supabase
-      .from("stp_checklists")
-      .select("id")
-      .eq("workspace_id", workspaceId)
-      .eq("stage", stage)
-      .maybeSingle();
-
-    if (existing.data) {
-      const { error } = await supabase
-        .from("stp_checklists")
-        .update({ items: stageItems })
-        .eq("id", existing.data.id);
-      if (error) toast.error("Ошибка: " + error.message);
-    } else {
-      const { error } = await supabase.from("stp_checklists").insert({
-        workspace_id: workspaceId,
-        stage,
-        items: stageItems,
+    try {
+      const res = await fetch("/api/stp", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stage, items: stageItems }),
       });
-      if (error) toast.error("Ошибка: " + error.message);
+      const data = await res.json();
+      if (!res.ok) toast.error("Ошибка: " + (data.error || "неизвестная"));
+    } catch {
+      toast.error("Ошибка сети");
     }
-
     setSaving(false);
     router.refresh();
   }

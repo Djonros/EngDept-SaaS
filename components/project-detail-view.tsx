@@ -32,7 +32,6 @@ import {
   Users,
   FileText,
 } from "lucide-react";
-import { createBrowserClient } from "@/lib/supabase-client";
 import { toast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -101,48 +100,68 @@ export function ProjectDetailView({
   async function handleTaskMove(taskId: string, newStage: TaskStage) {
     const task = tasks.find((t) => t.id === taskId);
     if (!task || task.stage === newStage) return;
-    const supabase = createBrowserClient();
     const update: Record<string, unknown> = { stage: newStage };
     if (newStage === "done") update.completed_at = new Date().toISOString();
     if (task.stage === "done" && newStage !== "done")
       update.completed_at = null;
-    const { error } = await supabase.from("tasks").update(update).eq("id", taskId);
-    if (error) {
-      toast.error("Ошибка: " + error.message);
-      return;
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(update),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        toast.error("Ошибка: " + (data.error || "неизвестная"));
+        return;
+      }
+      router.refresh();
+    } catch {
+      toast.error("Ошибка сети");
     }
-    router.refresh();
   }
 
   async function addMilestone(e: React.FormEvent) {
     e.preventDefault();
     if (!newMilestone.trim()) return;
     setMilestoneBusy(true);
-    const supabase = createBrowserClient();
-    const { error } = await supabase.from("milestones").insert({
-      project_id: project.id,
-      title: newMilestone.trim(),
-      order_index: milestones.length,
-    });
-    if (error) {
-      toast.error("Ошибка: " + error.message);
-    } else {
-      toast.success("Этап добавлен");
-      setNewMilestone("");
-      router.refresh();
+    try {
+      const res = await fetch("/api/milestones", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId: project.id,
+          title: newMilestone.trim(),
+          orderIndex: milestones.length,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error("Ошибка: " + (data.error || "неизвестная"));
+      } else {
+        toast.success("Этап добавлен");
+        setNewMilestone("");
+        router.refresh();
+      }
+    } catch {
+      toast.error("Ошибка сети");
     }
     setMilestoneBusy(false);
   }
 
   async function deleteMilestone(id: string) {
-    const supabase = createBrowserClient();
-    const { error } = await supabase.from("milestones").delete().eq("id", id);
-    if (error) {
-      toast.error("Ошибка: " + error.message);
-      return;
+    try {
+      const res = await fetch(`/api/milestones/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json();
+        toast.error("Ошибка: " + (data.error || "неизвестная"));
+        return;
+      }
+      toast.success("Этап удалён");
+      router.refresh();
+    } catch {
+      toast.error("Ошибка сети");
     }
-    toast.success("Этап удалён");
-    router.refresh();
   }
 
   async function addMember(e: React.FormEvent) {
@@ -152,52 +171,62 @@ export function ProjectDetailView({
       return;
     }
     setMemberBusy(true);
-    const supabase = createBrowserClient();
-    const { error } = await supabase.from("project_members").insert({
-      project_id: project.id,
-      user_id: newMemberId,
-      role: newMemberRole,
-    });
-    if (error) {
-      if (error.code === "23505") {
-        toast.error("Этот пользователь уже в команде проекта");
+    try {
+      const res = await fetch("/api/project-members", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId: project.id,
+          userId: newMemberId,
+          role: newMemberRole,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error("Ошибка: " + (data.error || "неизвестная"));
       } else {
-        toast.error("Ошибка: " + error.message);
+        toast.success("Участник добавлен");
+        setNewMemberId("");
+        setNewMemberRole("engineer");
+        router.refresh();
       }
-    } else {
-      toast.success("Участник добавлен");
-      setNewMemberId("");
-      setNewMemberRole("engineer");
-      router.refresh();
+    } catch {
+      toast.error("Ошибка сети");
     }
     setMemberBusy(false);
   }
 
   async function removeMember(id: string) {
-    const supabase = createBrowserClient();
-    const { error } = await supabase
-      .from("project_members")
-      .delete()
-      .eq("id", id);
-    if (error) {
-      toast.error("Ошибка: " + error.message);
-      return;
+    try {
+      const res = await fetch(`/api/project-members/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json();
+        toast.error("Ошибка: " + (data.error || "неизвестная"));
+        return;
+      }
+      toast.success("Участник удалён");
+      router.refresh();
+    } catch {
+      toast.error("Ошибка сети");
     }
-    toast.success("Участник удалён");
-    router.refresh();
   }
 
   async function changeMemberRole(id: string, role: ProjectMemberRole) {
-    const supabase = createBrowserClient();
-    const { error } = await supabase
-      .from("project_members")
-      .update({ role })
-      .eq("id", id);
-    if (error) {
-      toast.error("Ошибка: " + error.message);
-      return;
+    try {
+      const res = await fetch(`/api/project-members/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        toast.error("Ошибка: " + (data.error || "неизвестная"));
+        return;
+      }
+      router.refresh();
+    } catch {
+      toast.error("Ошибка сети");
     }
-    router.refresh();
   }
 
   const formOptions: TaskFormOptions = {

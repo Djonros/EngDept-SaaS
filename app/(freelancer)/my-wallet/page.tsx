@@ -15,7 +15,7 @@
 // ============================================================================
 
 import { requireSession } from "@/lib/session";
-import { createServerClient } from "@/lib/supabase-server";
+import { listTasks } from "@/lib/repo";
 import {
   Card,
   CardContent,
@@ -37,21 +37,14 @@ import { Wallet, Clock, CheckCircle2 } from "lucide-react";
 
 export default async function MyWalletPage() {
   const session = await requireSession();
-  const supabase = createServerClient();
   const wid = session.workspace.id;
 
-  const { data: tasks } = await supabase
-    .from("tasks")
-    .select(
-      `*,
-      project:projects(id, title)`
-    )
-    .eq("workspace_id", wid)
-    .eq("assignee_id", session.user.id)
-    .eq("stage", "done")
-    .order("completed_at", { ascending: false });
+  const tasks = listTasks(wid, {
+    assigneeId: session.user.id,
+    stage: "done",
+  });
 
-  const doneTasks = (tasks ?? []) as unknown as TaskWithRelations[];
+  const doneTasks = tasks as unknown as TaskWithRelations[];
 
   const totalEarned = doneTasks.reduce(
     (sum, t) => sum + (Number(t.cost) || 0),

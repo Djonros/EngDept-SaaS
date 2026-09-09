@@ -22,7 +22,7 @@
 // ============================================================================
 
 import { createPublicKey, verify as edVerify } from "crypto";
-import { createAdminClient } from "./supabase-client";
+import { getDb, newId } from "./db";
 import { LICENSE_PUBLIC_KEY } from "./license-public-key";
 import { getPlanConfig } from "./plans";
 import type { License, Plan } from "./types";
@@ -114,53 +114,54 @@ export async function activateLicense(
     return { success: false, error: verified.error };
   }
 
-  const supabase = createAdminClient();
+  const db = getDb();
   const normalizedKey = key.trim().toUpperCase().replace(/[\s-]/g, "");
 
-  const { data: existing } = await supabase
-    .from("licenses")
-    .select("*")
-    .eq("key", normalizedKey)
-    .single();
+  const existing = db
+    .prepare("SELECT * FROM licenses WHERE key = ?")
+    .get(normalizedKey) as { workspace_id?: string } | undefined;
 
   if (existing?.workspace_id && existing.workspace_id !== workspaceId) {
     return { success: false, error: "Ключ уже привязан к другому workspace" };
   }
 
-  const { data: license, error: writeErr } = await supabase
-    .from("licenses")
-    .upsert(
-      {
-        key: normalizedKey,
-        plan: verified.plan,
-        workspace_id: workspaceId,
-        hardware_id: hardwareId || null,
-        activated_at: new Date().toISOString(),
-        expires_at: verified.expiresAt,
-        status: "active",
-      },
-      { onConflict: "key" }
-    )
-    .select()
-    .single();
-
-  if (writeErr || !license) {
-    return { success: false, error: "Не удалось активировать лицензию" };
-  }
+  const licenseId = newId();
+  const activatedAt = new Date().toISOString();
+  db.prepare(
+    `INSERT INTO licenses (id, workspace_id, key, plan, activated_at, expires_at, hardware_id, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'active')
+     ON CONFLICT(key) DO UPDATE SET
+       workspace_id = excluded.workspace_id,
+       plan = excluded.plan,
+       activated_at = excluded.activated_at,
+       expires_at = excluded.expires_at,
+       hardware_id = excluded.hardware_id,
+       status = 'active'`
+  ).run(licenseId, workspaceId, normalizedKey, verified.plan, activatedAt, verified.expiresAt, hardwareId || null);
 
   const planConfig = getPlanConfig(verified.plan);
-  await supabase
-    .from("workspaces")
-    .update({
-      plan: verified.plan,
-      max_users: planConfig.maxUsers,
-      max_projects: planConfig.maxProjects,
-      license_key: normalizedKey,
-      expires_at: verified.expiresAt,
-    })
-    .eq("id", workspaceId);
+  db.prepare(
+    `UPDATE workspaces SET plan = ?, max_users = ?, max_projects = ?, license_key = ?, expires_at = ?
+     WHERE id = ?`
+  ).run(
+    verified.plan,
+    planConfig.maxUsers,
+    planConfig.maxProjects,
+    normalizedKey,
+    verified.expiresAt,
+    workspaceId
+  );
 
-  return { success: true, license: license as License };
+  db.prepare(
+    `INSERT INTO audit_log (id, workspace_id, user_id, action, entity_type, entity_id, metadata)
+     VALUES (?, ?, NULL, 'license.activated', 'license', ?, ?)`
+  ).run(newId(), workspaceId, normalizedKey, JSON.stringify({ plan: verified.plan }));
+
+  const license = db
+    .prepare("SELECT * FROM licenses WHERE key = ?")
+    .get(normalizedKey) as unknown as License;
+
+  return { success: true, license };
 }
 
 // ---- Runtime validation (local DB) ----
@@ -168,13 +169,12 @@ export async function validateLicense(
   workspaceId: string,
   hardwareId: string
 ): Promise<{ valid: boolean; plan: Plan; reason?: string }> {
-  const supabase = createAdminClient();
-
-  const { data: license } = await supabase
-    .from("licenses")
-    .select("*")
-    .eq("workspace_id", workspaceId)
-    .single();
+  const db = getDb();
+  const license = db
+    .prepare("SELECT * FROM licenses WHERE workspace_id = ?")
+    .get(workspaceId) as
+    | { status: string; expires_at: string | null; hardware_id: string | null; plan: Plan }
+    | undefined;
 
   if (!license) {
     return { valid: false, plan: "free", reason: "Лицензия не найдена" };
@@ -192,5 +192,5 @@ export async function validateLicense(
     return { valid: false, plan: "free", reason: "Несовпадение hardware_id" };
   }
 
-  return { valid: true, plan: license.plan as Plan };
+  return { valid: true, plan: license.plan };
 }

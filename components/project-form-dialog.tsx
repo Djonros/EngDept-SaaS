@@ -19,7 +19,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
-import { createBrowserClient } from "@/lib/supabase-client";
 import { toast } from "@/components/ui/toast";
 import {
   Dialog,
@@ -61,7 +60,6 @@ const STATUSES: ProjectStatus[] = ["active", "on_hold", "completed", "cancelled"
 export function ProjectFormDialog({
   mode,
   project,
-  workspaceId,
   trigger,
   open: controlledOpen,
   onOpenChange,
@@ -88,10 +86,8 @@ export function ProjectFormDialog({
     }
 
     setSaving(true);
-    const supabase = createBrowserClient();
 
     const payload = {
-      workspace_id: workspaceId,
       title: title.trim(),
       description: description.trim() || null,
       budget: budget ? Number(budget) : 0,
@@ -99,37 +95,45 @@ export function ProjectFormDialog({
       status,
     };
 
-    if (mode === "create") {
-      const { data, error } = await supabase
-        .from("projects")
-        .insert(payload)
-        .select("id")
-        .single();
-      if (error) {
-        toast.error("Ошибка: " + error.message);
+    try {
+      if (mode === "create") {
+        const res = await fetch("/api/projects", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          toast.error("Ошибка: " + (data.error || "неизвестная"));
+          setSaving(false);
+          return;
+        }
+        toast.success("Проект создан");
+        setSaving(false);
+        setOpen(false);
+        router.push(`/projects/${data.project.id}`);
+        return;
+      }
+
+      const res = await fetch(`/api/projects/${project!.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error("Ошибка: " + (data.error || "неизвестная"));
         setSaving(false);
         return;
       }
-      toast.success("Проект создан");
+      toast.success("Проект обновлён");
       setSaving(false);
       setOpen(false);
-      router.push(`/projects/${data.id}`);
-      return;
-    }
-
-    const { error } = await supabase
-      .from("projects")
-      .update(payload)
-      .eq("id", project!.id);
-    if (error) {
-      toast.error("Ошибка: " + error.message);
+      router.refresh();
+    } catch {
+      toast.error("Ошибка сети");
       setSaving(false);
-      return;
     }
-    toast.success("Проект обновлён");
-    setSaving(false);
-    setOpen(false);
-    router.refresh();
   }
 
   return (

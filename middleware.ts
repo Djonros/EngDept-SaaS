@@ -15,90 +15,50 @@
 // ============================================================================
 
 // ============================================================================
-//  Middleware — refreshes Supabase session on every request,
-//  protects /dashboard and /freelancer routes, redirects by role
+//  Middleware — cheap gate: session cookie presence.
+//  Full validation (signature, expiry, role) happens server-side in
+//  lib/session.ts on every page / API request.
 // ============================================================================
 
 import { type NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@supabase/ssr";
 
-const PUBLIC_ROUTES = ["/login", "/register", "/license-activate", "/auth"];
+const SESSION_COOKIE = "engdept_session";
 
-export async function middleware(request: NextRequest) {
+const PUBLIC_ROUTES = ["/login", "/register"];
+
+export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const hasSessionCookie = Boolean(request.cookies.get(SESSION_COOKIE)?.value);
 
-  // Allow public routes
+  // Logged-in users skip auth pages
   if (PUBLIC_ROUTES.some((r) => pathname.startsWith(r))) {
-    return NextResponse.next();
-  }
-
-  // Allow API routes + static assets
-  if (pathname.startsWith("/api") || pathname.startsWith("/_next")) {
-    return NextResponse.next();
-  }
-
-  // Build response that will carry refreshed auth cookies back to the browser
-  let supabaseResponse = NextResponse.next({ request });
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet: { name: string; value: string; options?: Record<string, unknown> }[]) {
-          cookiesToSet.forEach(({ name, value, options }) => {
-            request.cookies.set(name, value);
-            supabaseResponse.cookies.set(name, value, options ?? {});
-          });
-        },
-      },
+    if (hasSessionCookie) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/dashboard";
+      url.search = "";
+      return NextResponse.redirect(url);
     }
-  );
+    return NextResponse.next();
+  }
 
-  // getUser() validates the session and refreshes cookies if needed
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  // Everything else (except API/static) requires a session cookie
+  if (
+    !hasSessionCookie &&
+    !pathname.startsWith("/api") &&
+    !pathname.startsWith("/_next") &&
+    pathname !== "/"
+  ) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("redirect", pathname);
     return NextResponse.redirect(url);
   }
 
-  // Role-based route guard: freelancers can't access staff pages
-  if (
-    pathname.startsWith("/projects") ||
-    pathname.startsWith("/catalog") ||
-    pathname.startsWith("/admin") ||
-    pathname.startsWith("/analytics")
-  ) {
-    const { data: profile } = await supabase
-      .from("users")
-      .select("role, roles")
-      .eq("id", user.id)
-      .single();
-
-    const roles =
-      (profile?.roles as string[] | null) ??
-      (profile?.role ? [profile.role] : []);
-    const isFreelancerOnly =
-      roles.length === 0 || (roles.length === 1 && roles[0] === "freelancer");
-
-    if (isFreelancerOnly) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/my-tasks";
-      return NextResponse.redirect(url);
-    }
-  }
-
-  return supabaseResponse;
+  return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+  ],
 };

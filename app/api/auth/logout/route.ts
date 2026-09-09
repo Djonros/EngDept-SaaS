@@ -15,25 +15,16 @@
 // ============================================================================
 
 // ============================================================================
-//  Supabase browser + admin clients
-//  NO next/headers import → safe to import from client components
+//  POST /api/auth/logout — destroys session, clears cookie
 // ============================================================================
 
-import { createBrowserClient as _createBrowserClient } from "@supabase/ssr";
-import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import { NextRequest, NextResponse } from "next/server";
+import { destroySession, SESSION_COOKIE } from "@/lib/auth";
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-// ---------- Browser (RLS enforced) ----------
-export function createBrowserClient() {
-  return _createBrowserClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-}
-
-// ---------- Admin (bypasses RLS — server only, but no next/headers dep) ----------
-export function createAdminClient() {
-  return createSupabaseClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
+export async function POST(request: NextRequest) {
+  const token = request.cookies.get(SESSION_COOKIE)?.value;
+  if (token) destroySession(token);
+  const response = NextResponse.json({ success: true }, { status: 200 });
+  response.cookies.set(SESSION_COOKIE, "", { httpOnly: true, path: "/", maxAge: 0 });
+  return response;
 }

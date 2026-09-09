@@ -15,7 +15,11 @@
 // ============================================================================
 
 import { requireStaffSession } from "@/lib/session";
-import { createServerClient } from "@/lib/supabase-server";
+import {
+  listAnalyticsEngineers,
+  listAnalyticsProjects,
+  listAnalyticsTasks,
+} from "@/lib/repo";
 import { AnalyticsView } from "@/components/analytics-view";
 import { PlanPaywall } from "@/components/plan-paywall";
 import { hasFeature } from "@/lib/plans";
@@ -26,33 +30,11 @@ export default async function AnalyticsPage() {
   if (!hasFeature(session.workspace.plan, "analytics")) {
     return <PlanPaywall feature="analytics" />;
   }
-  const supabase = createServerClient();
   const wid = session.workspace.id;
 
-  const [{ data: tasks }, { data: projects }, { data: engineers }] =
-    await Promise.all([
-      supabase
-        .from("tasks")
-        .select(
-          `id, project_id, stage, cost, rework_count, assignee_id, completed_at, created_at`
-        )
-        .eq("workspace_id", wid),
-      supabase
-        .from("projects")
-        .select("id, title, budget, status, target_date, created_at")
-        .eq("workspace_id", wid)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("users")
-        .select("id, name, role")
-        .eq("workspace_id", wid)
-        .eq("is_active", true)
-        .in("role", ["engineer", "freelancer", "reviewer"]),
-    ]);
-
-  const taskList = tasks ?? [];
-  const projectList = projects ?? [];
-  const engineerList = engineers ?? [];
+  const taskList = listAnalyticsTasks(wid);
+  const projectList = listAnalyticsProjects(wid);
+  const engineerList = listAnalyticsEngineers(wid);
 
   // --- 1. Stage distribution ---
   const stageDistribution = STAGE_ORDER.map((stage) => ({

@@ -16,7 +16,7 @@
 
 import { notFound } from "next/navigation";
 import { requireSession } from "@/lib/session";
-import { createServerClient } from "@/lib/supabase-server";
+import { getProject, listTasks } from "@/lib/repo";
 import { PaymentDocument } from "@/components/payment-document";
 import { PlanPaywall } from "@/components/plan-paywall";
 import { hasFeature } from "@/lib/plans";
@@ -31,30 +31,12 @@ export default async function PaymentDocPage({
   if (!hasFeature(session.workspace.plan, "payment-doc")) {
     return <PlanPaywall feature="payment-doc" />;
   }
-  const supabase = createServerClient();
   const wid = session.workspace.id;
 
-  const [{ data: project, error }, { data: tasks }] = await Promise.all([
-    supabase
-      .from("projects")
-      .select("*")
-      .eq("id", params.id)
-      .eq("workspace_id", wid)
-      .single(),
-    supabase
-      .from("tasks")
-      .select(
-        `*,
-        assignee:users!assignee_id(id, name, email),
-        reviewer:users!reviewer_id(id, name, avatar_url),
-        project:projects(id, title),
-        milestone:milestones(id, title)`
-      )
-      .eq("project_id", params.id)
-      .order("created_at", { ascending: false }),
-  ]);
+  const project = getProject(wid, params.id);
+  if (!project) notFound();
 
-  if (error || !project) notFound();
+  const tasks = listTasks(wid, { projectId: params.id });
 
   const companyDetails =
     (session.workspace.company_details as CompanyDetails) ?? {};
@@ -62,7 +44,7 @@ export default async function PaymentDocPage({
   return (
     <PaymentDocument
       project={project as Project}
-      tasks={(tasks ?? []) as unknown as TaskWithRelations[]}
+      tasks={tasks as unknown as TaskWithRelations[]}
       companyName={session.workspace.name}
       logoUrl={session.workspace.logo_url}
       companyDetails={companyDetails}

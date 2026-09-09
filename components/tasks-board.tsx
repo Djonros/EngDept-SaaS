@@ -19,7 +19,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
-import { createBrowserClient } from "@/lib/supabase-client";
 import { toast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -63,23 +62,27 @@ export function TasksBoard({ tasks, workspaceId, options }: TasksBoardProps) {
     const task = tasks.find((t) => t.id === taskId);
     if (!task || task.stage === newStage) return;
 
-    const supabase = createBrowserClient();
     const update: Record<string, unknown> = { stage: newStage };
     if (newStage === "done") update.completed_at = new Date().toISOString();
     if (task.stage === "done" && newStage !== "done")
       update.completed_at = null;
 
-    const { error } = await supabase
-      .from("tasks")
-      .update(update)
-      .eq("id", taskId);
-
-    if (error) {
-      toast.error("Ошибка перемещения: " + error.message);
-      return;
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(update),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error("Ошибка перемещения: " + (data.error || "неизвестная"));
+        return;
+      }
+      toast.success(`${STAGE_LABELS[newStage]}`);
+      router.refresh();
+    } catch {
+      toast.error("Ошибка сети");
     }
-    toast.success(`${STAGE_LABELS[newStage]}`);
-    router.refresh();
   }
 
   return (

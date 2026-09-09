@@ -20,7 +20,6 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Building2, Loader2 } from "lucide-react";
-import { createBrowserClient } from "@/lib/supabase-client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -42,49 +41,21 @@ export default function RegisterPage() {
     setError(null);
 
     try {
-      const supabase = createBrowserClient();
-
-      // 1. Create auth user
-      const { data: authData, error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: { data: { full_name: userName, workspace_name: workspaceName } },
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workspaceName, userName, email, password }),
       });
-
-      if (signUpError || !authData.user) {
-        setError(signUpError?.message || "Ошибка регистрации");
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Ошибка регистрации");
         setLoading(false);
         return;
       }
-
-      // 2. If email confirmation is required, no session is returned yet
-      if (!authData.session) {
-        setError(
-          "Подтвердите email — мы отправили ссылку на " +
-            email +
-            ". После подтверждения войдите в систему."
-        );
-        setLoading(false);
-        return;
-      }
-
-      // 3. Create workspace + owner profile via RPC (requires active session)
-      const { error: rpcError } = await supabase.rpc("create_workspace_with_owner", {
-        p_workspace_name: workspaceName,
-        p_user_name: userName,
-        p_user_email: email,
-      });
-
-      if (rpcError) {
-        setError("Ошибка создания workspace: " + rpcError.message);
-        setLoading(false);
-        return;
-      }
-
       router.push("/dashboard");
       router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Произошла ошибка при регистрации");
+    } catch {
+      setError("Ошибка сети");
       setLoading(false);
     }
   }

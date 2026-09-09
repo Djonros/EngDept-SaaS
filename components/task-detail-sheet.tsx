@@ -30,7 +30,6 @@ import {
   Clock,
   RefreshCw,
 } from "lucide-react";
-import { createBrowserClient } from "@/lib/supabase-client";
 import { toast } from "@/components/ui/toast";
 import {
   Sheet,
@@ -108,7 +107,6 @@ export function TaskDetailSheet({
   async function moveStage(direction: 1 | -1) {
     if (!task) return;
     setBusy(true);
-    const supabase = createBrowserClient();
     const newIdx = stageIdx + direction;
     const newStage = STAGE_ORDER[newIdx];
 
@@ -117,21 +115,30 @@ export function TaskDetailSheet({
     if (task.stage === "done" && direction === -1) update.completed_at = null;
     if (direction === -1) update.rework_count = task.rework_count + 1;
 
-    const { error } = await supabase.from("tasks").update(update).eq("id", task.id);
+    try {
+      const res = await fetch(`/api/tasks/${task.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(update),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error("Ошибка: " + (data.error || "неизвестная"));
+        setBusy(false);
+        return;
+      }
 
-    if (error) {
-      toast.error("Ошибка: " + error.message);
+      toast.success(
+        direction === 1
+          ? `Перемещено: ${STAGE_LABELS[newStage]}`
+          : `Возврат: ${STAGE_LABELS[newStage]}`
+      );
       setBusy(false);
-      return;
+      router.refresh();
+    } catch {
+      toast.error("Ошибка сети");
+      setBusy(false);
     }
-
-    toast.success(
-      direction === 1
-        ? `Перемещено: ${STAGE_LABELS[newStage]}`
-        : `Возврат: ${STAGE_LABELS[newStage]}`
-    );
-    setBusy(false);
-    router.refresh();
   }
 
   return (

@@ -19,7 +19,6 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Sparkles } from "lucide-react";
-import { createBrowserClient } from "@/lib/supabase-client";
 import { Sidebar } from "@/components/sidebar";
 import { Button } from "@/components/ui/button";
 import type { UserRole, Plan } from "@/lib/types";
@@ -43,8 +42,11 @@ export function AppShell({ children, user, workspace }: AppShellProps) {
   const router = useRouter();
 
   async function handleSignOut() {
-    const supabase = createBrowserClient();
-    await supabase.auth.signOut();
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch {
+      void 0;
+    }
     router.push("/login");
     router.refresh();
   }

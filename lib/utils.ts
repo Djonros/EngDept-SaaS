@@ -2,7 +2,7 @@
 //  Copyright (c) 2024-2026 Djonros (djonros@gmail.com)
 //  All rights reserved.
 //
-//  This software and its source code are the proprietary property of Djonros.
+//  This software and its source code is the proprietary property of Djonros.
 //  Unauthorized copying, modification, merging, publication, distribution,
 //  sublicensing, and/or selling of this software, via any medium, is strictly
 //  prohibited without prior written permission from the copyright holder.
@@ -41,26 +41,4 @@ export function formatCurrency(
     currency,
     maximumFractionDigits: 0,
   }).format(Number(amount));
-}
-
-// ---- Audit logger ----
-export async function logAction(params: {
-  workspaceId: string;
-  userId: string;
-  action: string;
-  entityType?: string;
-  entityId?: string;
-  metadata?: Record<string, unknown>;
-}) {
-  const { createAdminClient } = await import("./supabase-client");
-  const supabase = createAdminClient();
-
-  await supabase.from("audit_log").insert({
-    workspace_id: params.workspaceId,
-    user_id: params.userId,
-    action: params.action,
-    entity_type: params.entityType ?? null,
-    entity_id: params.entityId ?? null,
-    metadata: params.metadata ?? {},
-  });
 }

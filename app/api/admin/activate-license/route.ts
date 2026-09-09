@@ -17,12 +17,11 @@
 // ============================================================================
 //  POST /api/admin/activate-license
 //  Offline activation: the key carries an Ed25519 signature and is verified
-//  locally (no vendor server needed). Writes the license into this
-//  deployment's own database.
+//  locally (no vendor server needed). Writes the license into the local DB.
 // ============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@/lib/supabase-server";
+import { apiSession, unauthorized, forbidden } from "@/lib/api-auth";
 import { activateLicense } from "@/lib/license-server";
 
 export async function POST(request: NextRequest) {
@@ -39,34 +38,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const serverClient = createServerClient();
-    const {
-      data: { user: authUser },
-    } = await serverClient.auth.getUser();
-
-    if (!authUser) {
-      return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
-    }
-
-    const { data: caller } = await serverClient
-      .from("users")
-      .select("id, workspace_id, role, roles")
-      .eq("id", authUser.id)
-      .single();
-
-    const callerRoles =
-      (caller?.roles as string[] | null) ?? (caller ? [caller.role] : []);
-
-    if (!caller || !callerRoles.includes("owner")) {
-      return NextResponse.json(
-        { error: "Доступ только для владельца workspace" },
-        { status: 403 }
-      );
-    }
+    const session = apiSession(request);
+    if (!session) return unauthorized();
+    if (!session.roles.includes("owner")) return forbidden();
 
     const result = await activateLicense(
       licenseKey.trim(),
-      caller.workspace_id,
+      session.workspace.id,
       hardwareId ?? ""
     );
 

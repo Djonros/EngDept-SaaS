@@ -15,7 +15,7 @@
 // ============================================================================
 
 import { requireSession } from "@/lib/session";
-import { createServerClient } from "@/lib/supabase-server";
+import { countActiveWorkspaceUsers, listActiveProjectsBrief, listTasks } from "@/lib/repo";
 import { DashboardView } from "@/components/dashboard-view";
 import {
   STAGE_ORDER,
@@ -25,51 +25,30 @@ import {
 
 export default async function DashboardPage() {
   const session = await requireSession();
-  const supabase = createServerClient();
   const wid = session.workspace.id;
 
-  const [{ data: tasks }, { data: projects }, { count: teamSize }] =
-    await Promise.all([
-      supabase
-        .from("tasks")
-        .select(
-          `*,
-          assignee:users!assignee_id(id, name, avatar_url),
-          reviewer:users!reviewer_id(id, name, avatar_url),
-          project:projects(id, title),
-          milestone:milestones(id, title)`
-        )
-        .eq("workspace_id", wid)
-        .order("created_at", { ascending: false })
-        .limit(50),
-      supabase
-        .from("projects")
-        .select("id, title, budget, status")
-        .eq("workspace_id", wid)
-        .eq("status", "active"),
-      supabase
-        .from("users")
-        .select("id", { count: "exact", head: true })
-        .eq("workspace_id", wid)
-        .eq("is_active", true),
-    ]);
+  const [taskList, projects, teamSize] = [
+    listTasks(wid, { limit: 50 }),
+    listActiveProjectsBrief(wid),
+    countActiveWorkspaceUsers(wid),
+  ];
 
-  const taskList = (tasks ?? []) as unknown as TaskWithRelations[];
+  const tasks = taskList as TaskWithRelations[];
   const now = new Date();
 
   const stageCounts = STAGE_ORDER.reduce(
     (acc, stage) => {
-      acc[stage] = taskList.filter((t) => t.stage === stage).length;
+      acc[stage] = tasks.filter((t) => t.stage === stage).length;
       return acc;
     },
     {} as Record<TaskStage, number>
   );
 
-  const overdueTasks = taskList.filter(
+  const overdueTasks = tasks.filter(
     (t) => t.due_date && !t.completed_at && new Date(t.due_date) < now
   ).length;
 
-  const totalBudget = (projects ?? []).reduce(
+  const totalBudget = projects.reduce(
     (sum, p) => sum + (p.budget ? Number(p.budget) : 0),
     0
   );
@@ -78,14 +57,14 @@ export default async function DashboardPage() {
     <DashboardView
       workspaceName={session.workspace.name}
       stats={{
-        activeProjects: projects?.length ?? 0,
-        totalTasks: taskList.length,
+        activeProjects: projects.length,
+        totalTasks: tasks.length,
         overdueTasks,
         teamSize: teamSize ?? 0,
         totalBudget,
       }}
       stageCounts={stageCounts}
-      recentTasks={taskList.slice(0, 8)}
+      recentTasks={tasks.slice(0, 8)}
     />
   );
 }

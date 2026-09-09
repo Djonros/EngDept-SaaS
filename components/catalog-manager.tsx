@@ -19,7 +19,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Pencil, Trash2, Loader2 } from "lucide-react";
-import { createBrowserClient } from "@/lib/supabase-client";
 import { toast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -78,12 +77,10 @@ function ItemDialog({
   open,
   onOpenChange,
   item,
-  workspaceId,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   item: PriceCatalogItem | null;
-  workspaceId: string;
 }) {
   const router = useRouter();
   const [name, setName] = useState(item?.operation_name ?? "");
@@ -107,26 +104,26 @@ function ItemDialog({
     e.preventDefault();
     if (!name.trim()) return;
     setSaving(true);
-    const supabase = createBrowserClient();
+
     const payload = {
-      workspace_id: workspaceId,
+      id: item?.id,
       operation_name: name.trim(),
       category,
       base_price: price ? Number(price) : 0,
       unit,
     };
 
-    if (item) {
-      const { error } = await supabase
-        .from("price_catalog")
-        .update(payload)
-        .eq("id", item.id);
-      if (error) toast.error(error.message);
-      else toast.success("Обновлено");
-    } else {
-      const { error } = await supabase.from("price_catalog").insert(payload);
-      if (error) toast.error(error.message);
-      else toast.success("Добавлено");
+    try {
+      const res = await fetch("/api/catalog", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) toast.error(data.error || "Ошибка");
+      else toast.success(item ? "Обновлено" : "Добавлено");
+    } catch {
+      toast.error("Ошибка сети");
     }
 
     setSaving(false);
@@ -218,12 +215,10 @@ function MultiplierDialog({
   open,
   onOpenChange,
   multiplier,
-  workspaceId,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   multiplier: PriceMultiplier | null;
-  workspaceId: string;
 }) {
   const router = useRouter();
   const [name, setName] = useState(multiplier?.name ?? "");
@@ -244,25 +239,25 @@ function MultiplierDialog({
     e.preventDefault();
     if (!name.trim()) return;
     setSaving(true);
-    const supabase = createBrowserClient();
+
     const payload = {
-      workspace_id: workspaceId,
+      id: multiplier?.id,
       name: name.trim(),
       value: Number(value) || 1,
       applies_to: appliesTo,
     };
 
-    if (multiplier) {
-      const { error } = await supabase
-        .from("price_multipliers")
-        .update(payload)
-        .eq("id", multiplier.id);
-      if (error) toast.error(error.message);
-      else toast.success("Обновлено");
-    } else {
-      const { error } = await supabase.from("price_multipliers").insert(payload);
-      if (error) toast.error(error.message);
-      else toast.success("Добавлено");
+    try {
+      const res = await fetch("/api/multipliers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) toast.error(data.error || "Ошибка");
+      else toast.success(multiplier ? "Обновлено" : "Добавлено");
+    } catch {
+      toast.error("Ошибка сети");
     }
 
     setSaving(false);
@@ -337,7 +332,6 @@ function MultiplierDialog({
 export function CatalogManager({
   items,
   multipliers,
-  workspaceId,
 }: CatalogManagerProps) {
   const router = useRouter();
   const [itemOpen, setItemOpen] = useState(false);
@@ -346,28 +340,33 @@ export function CatalogManager({
   const [editMult, setEditMult] = useState<PriceMultiplier | null>(null);
 
   async function deleteItem(id: string) {
-    const supabase = createBrowserClient();
-    const { error } = await supabase.from("price_catalog").delete().eq("id", id);
-    if (error) {
-      toast.error(error.message);
-      return;
+    try {
+      const res = await fetch(`/api/catalog?id=${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json();
+        toast.error(data.error || "Ошибка");
+        return;
+      }
+      toast.success("Удалено");
+      router.refresh();
+    } catch {
+      toast.error("Ошибка сети");
     }
-    toast.success("Удалено");
-    router.refresh();
   }
 
   async function deleteMultiplier(id: string) {
-    const supabase = createBrowserClient();
-    const { error } = await supabase
-      .from("price_multipliers")
-      .delete()
-      .eq("id", id);
-    if (error) {
-      toast.error(error.message);
-      return;
+    try {
+      const res = await fetch(`/api/multipliers?id=${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json();
+        toast.error(data.error || "Ошибка");
+        return;
+      }
+      toast.success("Удалено");
+      router.refresh();
+    } catch {
+      toast.error("Ошибка сети");
     }
-    toast.success("Удалено");
-    router.refresh();
   }
 
   function openAddItem() {
@@ -540,13 +539,11 @@ export function CatalogManager({
         open={itemOpen}
         onOpenChange={setItemOpen}
         item={editItem}
-        workspaceId={workspaceId}
       />
       <MultiplierDialog
         open={multOpen}
         onOpenChange={setMultOpen}
         multiplier={editMult}
-        workspaceId={workspaceId}
       />
     </div>
   );

@@ -15,53 +15,34 @@
 // ============================================================================
 
 import { requireSession } from "@/lib/session";
-import { createServerClient } from "@/lib/supabase-server";
+import { listMilestonesForWorkspace, listProjects, listTasks, listWorkspaceUsers } from "@/lib/repo";
 import { TasksBoard } from "@/components/tasks-board";
 import type { TaskWithRelations } from "@/lib/types";
 
 export default async function TasksPage() {
   const session = await requireSession();
-  const supabase = createServerClient();
   const wid = session.workspace.id;
 
-  const [{ data: tasks }, { data: projects }, { data: milestones }, { data: users }] =
-    await Promise.all([
-      supabase
-        .from("tasks")
-        .select(
-          `*,
-          assignee:users!assignee_id(id, name, avatar_url),
-          reviewer:users!reviewer_id(id, name, avatar_url),
-          project:projects(id, title),
-          milestone:milestones(id, title)`
-        )
-        .eq("workspace_id", wid)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("projects")
-        .select("id, title")
-        .eq("workspace_id", wid)
-        .order("title"),
-      supabase
-        .from("milestones")
-        .select("id, title, project_id")
-        .order("order_index"),
-      supabase
-        .from("users")
-        .select("id, name")
-        .eq("workspace_id", wid)
-        .eq("is_active", true)
-        .order("name"),
-    ]);
+  const tasks = listTasks(wid);
+  const projects = listProjects(wid).map((p) => ({ id: p.id, title: p.title }));
+  const milestones = listMilestonesForWorkspace(wid).map((m) => ({
+    id: m.id,
+    title: m.title,
+    project_id: m.project_id,
+  }));
+  const users = listWorkspaceUsers(wid)
+    .filter((u) => u.is_active)
+    .map((u) => ({ id: u.id, name: u.name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <TasksBoard
-      tasks={(tasks ?? []) as unknown as TaskWithRelations[]}
+      tasks={tasks as unknown as TaskWithRelations[]}
       workspaceId={wid}
       options={{
-        projects: projects ?? [],
-        milestones: milestones ?? [],
-        users: users ?? [],
+        projects,
+        milestones,
+        users,
       }}
     />
   );

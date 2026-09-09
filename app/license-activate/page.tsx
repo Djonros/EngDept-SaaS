@@ -19,7 +19,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ShieldCheck, Loader2, CheckCircle2, XCircle } from "lucide-react";
-import { createBrowserClient } from "@/lib/supabase-client";
 import { getHardwareFingerprint } from "@/lib/license-validator";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,17 +38,6 @@ export default function LicenseActivatePage() {
     e.preventDefault();
     setLoading(true);
     setResult(null);
-
-    const supabase = createBrowserClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      setResult({ success: false, message: "Необходима авторизация" });
-      setLoading(false);
-      return;
-    }
 
     const hardwareId = await getHardwareFingerprint();
 

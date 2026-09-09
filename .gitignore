@@ -14,3 +14,4 @@ supabase/.temp
 *-dist.zip
 SQL
 generate-license.bat
+data/

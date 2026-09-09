@@ -62,7 +62,6 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { createBrowserClient } from "@/lib/supabase-client";
 import {
   ROLE_LABELS,
   type CompanyDetails,
@@ -135,18 +134,46 @@ export function AdminPanel({
     }
   }
 
-  async function handleToggleActive(user: User) {
-    const supabase = createBrowserClient();
-    const { error } = await supabase
-      .from("users")
-      .update({ is_active: !user.is_active })
-      .eq("id", user.id);
+  async function handleResetPassword(user: User) {
+    const password = prompt(`Новый пароль для ${user.name} (мин. 6 символов):`);
+    if (!password) return;
+    if (password.length < 6) {
+      toast.error("Пароль должен быть не короче 6 символов");
+      return;
+    }
+    try {
+      const res = await fetch("/api/admin/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error("Ошибка: " + (data.error || "неизвестная"));
+      } else {
+        toast.success("Пароль обновлён — сообщите его сотруднику");
+      }
+    } catch {
+      toast.error("Ошибка сети");
+    }
+  }
 
-    if (error) {
-      toast.error("Ошибка: " + error.message);
-    } else {
-      toast.success(user.is_active ? "Пользователь деактивирован" : "Пользователь активирован");
-      router.refresh();
+  async function handleToggleActive(user: User) {
+    try {
+      const res = await fetch("/api/admin/toggle-active", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id, isActive: !user.is_active }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error("Ошибка: " + (data.error || "неизвестная"));
+      } else {
+        toast.success(user.is_active ? "Пользователь деактивирован" : "Пользователь активирован");
+        router.refresh();
+      }
+    } catch {
+      toast.error("Ошибка сети");
     }
   }
 
@@ -298,14 +325,24 @@ export function AdminPanel({
                       </TableCell>
                       <TableCell className="text-right">
                         {!hasRole(user.roles, "owner") && user.role !== "owner" && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleToggleActive(user)}
-                          >
-                            <Power className="h-4 w-4" />
-                            {user.is_active ? "Отключить" : "Включить"}
-                          </Button>
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleResetPassword(user)}
+                            >
+                              <Key className="h-4 w-4" />
+                              Пароль
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleToggleActive(user)}
+                            >
+                              <Power className="h-4 w-4" />
+                              {user.is_active ? "Отключить" : "Включить"}
+                            </Button>
+                          </>
                         )}
                       </TableCell>
                     </TableRow>
@@ -518,17 +555,21 @@ function WorkspaceSettings({ workspace }: { workspace: Workspace }) {
     e.preventDefault();
     if (!name.trim()) return;
     setSavingName(true);
-    const supabase = createBrowserClient();
-    const { error } = await supabase
-      .from("workspaces")
-      .update({ name: name.trim() })
-      .eq("id", workspace.id);
-
-    if (error) {
-      toast.error("Ошибка: " + error.message);
-    } else {
-      toast.success("Название обновлено");
-      router.refresh();
+    try {
+      const res = await fetch("/api/admin/workspace", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error("Ошибка: " + (data.error || "неизвестная"));
+      } else {
+        toast.success("Название обновлено");
+        router.refresh();
+      }
+    } catch {
+      toast.error("Ошибка сети");
     }
     setSavingName(false);
   }
@@ -543,50 +584,35 @@ function WorkspaceSettings({ workspace }: { workspace: Workspace }) {
     }
 
     setUploading(true);
-    const supabase = createBrowserClient();
-    const ext = file.name.split(".").pop() || "png";
-    const path = `${workspace.id}/logo.${ext}`;
-
-    const { error: upErr } = await supabase.storage
-      .from("workspace-files")
-      .upload(path, file, { upsert: true });
-
-    if (upErr) {
-      toast.error("Ошибка загрузки: " + upErr.message);
-      setUploading(false);
-      return;
-    }
-
-    const { data: pub } = supabase.storage
-      .from("workspace-files")
-      .getPublicUrl(path);
-
-    const { error: dbErr } = await supabase
-      .from("workspaces")
-      .update({ logo_url: pub.publicUrl })
-      .eq("id", workspace.id);
-
-    if (dbErr) {
-      toast.error("Ошибка сохранения: " + dbErr.message);
-    } else {
-      toast.success("Логотип обновлён");
-      router.refresh();
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch("/api/admin/logo", { method: "POST", body: form });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error("Ошибка загрузки: " + (data.error || "неизвестная"));
+      } else {
+        toast.success("Логотип обновлён");
+        router.refresh();
+      }
+    } catch {
+      toast.error("Ошибка сети");
     }
     setUploading(false);
   }
 
   async function handleRemoveLogo() {
-    const supabase = createBrowserClient();
-    const { error } = await supabase
-      .from("workspaces")
-      .update({ logo_url: null })
-      .eq("id", workspace.id);
-
-    if (error) {
-      toast.error("Ошибка: " + error.message);
-    } else {
-      toast.success("Логотип удалён");
-      router.refresh();
+    try {
+      const res = await fetch("/api/admin/logo", { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error("Ошибка: " + (data.error || "неизвестная"));
+      } else {
+        toast.success("Логотип удалён");
+        router.refresh();
+      }
+    } catch {
+      toast.error("Ошибка сети");
     }
   }
 
@@ -818,16 +844,21 @@ function CompanyDetailsSettings({ workspace }: { workspace: Workspace }) {
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
-    const supabase = createBrowserClient();
-    const { error } = await supabase
-      .from("workspaces")
-      .update({ company_details: details })
-      .eq("id", workspace.id);
-    if (error) {
-      toast.error("Ошибка: " + error.message);
-    } else {
-      toast.success("Реквизиты сохранены");
-      router.refresh();
+    try {
+      const res = await fetch("/api/admin/workspace", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ companyDetails: details }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error("Ошибка: " + (data.error || "неизвестная"));
+      } else {
+        toast.success("Реквизиты сохранены");
+        router.refresh();
+      }
+    } catch {
+      toast.error("Ошибка сети");
     }
     setSaving(false);
   }

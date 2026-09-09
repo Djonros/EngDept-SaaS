@@ -15,25 +15,25 @@
 // ============================================================================
 
 // ============================================================================
-//  POST /api/license-check
-//  Runtime license validation endpoint (called by client on app load)
+//  API auth helper — reads session from request cookie
 // ============================================================================
 
-import { NextRequest, NextResponse } from "next/server";
-import { validateLicense } from "@/lib/license-server";
+import { NextRequest } from "next/server";
+import { getSessionByToken, SESSION_COOKIE, type SessionData } from "./auth";
 
-export async function POST(request: NextRequest) {
-  try {
-    const { workspaceId, hardwareId } = await request.json();
+export function apiSession(request: NextRequest): SessionData | null {
+  const token = request.cookies.get(SESSION_COOKIE)?.value;
+  return getSessionByToken(token);
+}
 
-    if (!workspaceId) {
-      return NextResponse.json({ valid: false, reason: "workspaceId required" }, { status: 400 });
-    }
+export function unauthorized() {
+  return Response.json({ error: "Не авторизован" }, { status: 401 });
+}
 
-    const result = await validateLicense(workspaceId, hardwareId || "");
+export function forbidden() {
+  return Response.json({ error: "Недостаточно прав" }, { status: 403 });
+}
 
-    return NextResponse.json(result, { status: 200 });
-  } catch {
-    return NextResponse.json({ valid: false, reason: "Internal error" }, { status: 500 });
-  }
+export function isManagerOrOwner(session: SessionData): boolean {
+  return session.roles.includes("owner") || session.roles.includes("manager");
 }

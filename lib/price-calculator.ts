@@ -19,7 +19,7 @@
 //  Computes task cost: base_price × applicable multipliers × quantity
 // ============================================================================
 
-import type { PriceCatalogItem, PriceMultiplier, TaskStage } from "./types";
+import type { PriceMultiplier, TaskStage } from "./types";
 
 export interface PriceBreakdown {
   basePrice: number;
@@ -74,24 +74,6 @@ export function calculatePrice(params: {
     multiplierTotal,
     finalPrice: Math.round(running * 100) / 100,
     breakdown,
-  };
-}
-
-// ---- Fetch catalog + multipliers for a workspace ----
-export async function fetchPricingData(
-  workspaceId: string,
-  supabase: ReturnType<
-    typeof import("./supabase-server")["createServerClient"]
-  >
-): Promise<{ catalog: PriceCatalogItem[]; multipliers: PriceMultiplier[] }> {
-  const [{ data: catalog }, { data: multipliers }] = await Promise.all([
-    supabase.from("price_catalog").select("*").eq("workspace_id", workspaceId),
-    supabase.from("price_multipliers").select("*").eq("workspace_id", workspaceId),
-  ]);
-
-  return {
-    catalog: (catalog as PriceCatalogItem[]) ?? [],
-    multipliers: (multipliers as PriceMultiplier[]) ?? [],
   };
 }
 
